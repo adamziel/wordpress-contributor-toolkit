@@ -16,17 +16,22 @@ See *[How does it work?](#how-does-it-work)* for more details.
 Getting a Core dev environment running (Node, npm, git, PHP/MySQL or an alternative) is a common source of friction for new contributors. This app removes most of that friction by bundling the tooling and using WordPress Playground locally for the server.
 
 ### Screenshots
+
+#### Video demo
+
+<video src="docs/video.mp4" width="300" alt="UI"></video>
+
 #### UI
 
 <img src="docs/1.%20UI.png" width="300" alt="UI">
 
 #### Choosing a destination folder for the site
 
-<img src="docs/2.%20create%20first%20site.png" width="300" alt="UI">
+<img src="docs/2.%20Create%20first%20site.png" width="300" alt="UI">
 
 #### Cloning the git repository
 
-<img src="docs/3.%20cloned%20git%20repo.png" width="300" alt="UI">
+<img src="docs/3.%20Cloned%20git%20repo.png" width="300" alt="UI">
 
 #### Running `npm install`
 
