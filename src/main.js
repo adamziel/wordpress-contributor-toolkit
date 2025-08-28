@@ -24,9 +24,33 @@ function ensureNodeShimDir() {
             const content = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" %*\r\n`;
             fs.writeFileSync(path.join(nodeShimDir, 'node.cmd'), content);
             fs.writeFileSync(path.join(nodeShimDir, 'node.bat'), content);
+            // Provide npm/npx shims that invoke npm's CLI through Electron's Node
+            try {
+                const npmPkgJsonPath = require.resolve('npm/package.json');
+                const npmRootDir = path.dirname(npmPkgJsonPath);
+                const npmCliAbsPath = path.join(npmRootDir, 'bin', 'npm-cli.js');
+                const npxCliAbsPath = path.join(npmRootDir, 'bin', 'npx-cli.js');
+                const npmCmd = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" "${npmCliAbsPath}" %*\r\n`;
+                const npxCmd = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" "${npxCliAbsPath}" %*\r\n`;
+                fs.writeFileSync(path.join(nodeShimDir, 'npm.cmd'), npmCmd);
+                fs.writeFileSync(path.join(nodeShimDir, 'npm.bat'), npmCmd);
+                fs.writeFileSync(path.join(nodeShimDir, 'npx.cmd'), npxCmd);
+                fs.writeFileSync(path.join(nodeShimDir, 'npx.bat'), npxCmd);
+            } catch {}
         } else {
             const content = `#!/usr/bin/env bash\nELECTRON_RUN_AS_NODE=1 "${process.execPath}" "$@"\n`;
             fs.writeFileSync(path.join(nodeShimDir, 'node'), content, { mode: 0o755 });
+            // Provide npm/npx shims that invoke npm's CLI through Electron's Node
+            try {
+                const npmPkgJsonPath = require.resolve('npm/package.json');
+                const npmRootDir = path.dirname(npmPkgJsonPath);
+                const npmCliAbsPath = path.join(npmRootDir, 'bin', 'npm-cli.js');
+                const npxCliAbsPath = path.join(npmRootDir, 'bin', 'npx-cli.js');
+                const npmSh = `#!/usr/bin/env bash\nELECTRON_RUN_AS_NODE=1 "${process.execPath}" "${npmCliAbsPath}" "$@"\n`;
+                const npxSh = `#!/usr/bin/env bash\nELECTRON_RUN_AS_NODE=1 "${process.execPath}" "${npxCliAbsPath}" "$@"\n`;
+                fs.writeFileSync(path.join(nodeShimDir, 'npm'), npmSh, { mode: 0o755 });
+                fs.writeFileSync(path.join(nodeShimDir, 'npx'), npxSh, { mode: 0o755 });
+            } catch {}
         }
     } catch {}
     return nodeShimDir;
