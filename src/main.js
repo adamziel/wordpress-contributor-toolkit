@@ -23,6 +23,7 @@ function ensureNodeShimDir() {
         if (process.platform === 'win32') {
             const content = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" %*\r\n`;
             fs.writeFileSync(path.join(nodeShimDir, 'node.cmd'), content);
+            fs.writeFileSync(path.join(nodeShimDir, 'node.bat'), content);
         } else {
             const content = `#!/usr/bin/env bash\nELECTRON_RUN_AS_NODE=1 "${process.execPath}" "$@"\n`;
             fs.writeFileSync(path.join(nodeShimDir, 'node'), content, { mode: 0o755 });
@@ -275,7 +276,12 @@ ipcMain.handle('npm:install', async (event, directoryPath) => {
 			...process.env,
 			ELECTRON_RUN_AS_NODE: '1',
 			NODE: process.execPath,
-			PATH: process.platform === 'win32' ? `${ensureNodeShimDir()};${process.env.PATH || ''}` : `${ensureNodeShimDir()}:${process.env.PATH || ''}`
+			// On Windows, ensure both PATH and Path are set, and PATHEXT includes .CMD/.BAT
+			PATH: process.platform === 'win32' ? `${ensureNodeShimDir()};${process.env.PATH || ''}` : `${ensureNodeShimDir()}:${process.env.PATH || ''}`,
+			Path: process.platform === 'win32' ? `${ensureNodeShimDir()};${process.env.Path || process.env.PATH || ''}` : undefined,
+			PATHEXT: process.platform === 'win32' ? [
+				'.COM','.EXE','.BAT','.CMD','.VBS','.VBE','.JS','.JSE','.WSF','.WSH','.MSC'
+			].join(';') : process.env.PATHEXT
 		},
 		shell: false
 	});
@@ -309,7 +315,11 @@ ipcMain.handle('npm:run-script', async (event, directoryPath, scriptName, script
 			...process.env,
 			ELECTRON_RUN_AS_NODE: '1',
 			NODE: process.execPath,
-			PATH: process.platform === 'win32' ? `${ensureNodeShimDir()};${process.env.PATH || ''}` : `${ensureNodeShimDir()}:${process.env.PATH || ''}`
+			PATH: process.platform === 'win32' ? `${ensureNodeShimDir()};${process.env.PATH || ''}` : `${ensureNodeShimDir()}:${process.env.PATH || ''}`,
+			Path: process.platform === 'win32' ? `${ensureNodeShimDir()};${process.env.Path || process.env.PATH || ''}` : undefined,
+			PATHEXT: process.platform === 'win32' ? [
+				'.COM','.EXE','.BAT','.CMD','.VBS','.VBE','.JS','.JSE','.WSF','.WSH','.MSC'
+			].join(';') : process.env.PATHEXT
 		},
 		shell: false
 	});
