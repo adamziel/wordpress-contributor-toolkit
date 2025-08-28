@@ -231,50 +231,39 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
 
 function App() {
   const { sites, siteMeta, refresh, setSiteMeta, setSites } = useSites();
-  const [downloading, setDownloading] = useState(false);
-  const [downloadPct, setDownloadPct] = useState(0);
   const [downloadPhase, setDownloadPhase] = useState('');
   const [pendingSite, setPendingSite] = useState(null);
+  const [terminalMsgs, setTerminalMsgs] = useState('');
 
   useEffect(() => {
-    const progressHandler = (_e, p) => {
-      if (!p || typeof p.percent !== 'number') return;
-      setDownloading(true);
-      setDownloadPct(Math.round(p.percent));
-      setPendingSite((prev) => prev || { targetDir: p.target });
-    };
-    const statusHandler = (_e, s) => {
+    const unsubProg = window.api.subscribeSetupProgress((p) => {
+      if (p && p.message) setTerminalMsgs((v) => v + p.message + '\n');
+      if (p && p.target) setPendingSite((prev) => prev || { targetDir: p.target });
+    });
+    const unsubStat = window.api.subscribeSetupStatus((s) => {
       if (!s) return;
       setPendingSite((prev) => prev || { targetDir: s.target });
-      if (s.phase === 'downloading') setDownloadPhase('Downloading WordPress…');
-      if (s.phase === 'unzipping') setDownloadPhase('Unzipping…');
-      if (s.phase === 'done') {
-        setDownloading(false);
-        setDownloadPct(100);
+      if (s.phase === 'cloning') setDownloadPhase('Cloning repository…');
+      else if (s.phase === 'unzipping') setDownloadPhase('Unzipping…');
+      else if (s.phase === 'downloading') setDownloadPhase('Downloading…');
+      else if (s.phase === 'done') {
         setDownloadPhase('');
         setPendingSite(null);
+        setTerminalMsgs('');
       }
-    };
-    const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
-    ipcRenderer?.on?.('download:progress', progressHandler);
-    ipcRenderer?.on?.('download:status', statusHandler);
-    return () => {
-      ipcRenderer?.removeListener?.('download:progress', progressHandler);
-      ipcRenderer?.removeListener?.('download:status', statusHandler);
-    };
+    });
+    return () => { unsubProg && unsubProg(); unsubStat && unsubStat(); };
   }, []);
 
   const chooseAndSetup = useCallback(async () => {
     const dir = await window.api.chooseDirectory();
     if (!dir) return;
     try {
-      setDownloading(true);
-      setDownloadPct(0);
+      setTerminalMsgs('');
       setPendingSite({ targetDir: dir });
       await window.api.setupWordPress(dir);
       await refresh();
     } catch (e) {
-      setDownloading(false);
       setPendingSite(null);
       alert(String(e));
     }
@@ -308,10 +297,8 @@ function App() {
           <Card style={{ marginBottom: 12 }}>
             <CardBody>
               <div style={{ fontWeight: 600 }}>Setting up new site…</div>
-              <div style={{ marginTop: 8, background: '#eee', borderRadius: 4, overflow: 'hidden', height: 10 }}>
-                <div style={{ width: `${downloadPct}%`, height: '100%', background: '#007cba', transition: 'width 0.2s' }} />
-              </div>
-              <div style={{ fontSize: 12, color: '#555', marginTop: 4 }}>{downloadPhase || `Downloading… ${downloadPct}%`}</div>
+              {downloadPhase && <div style={{ fontSize: 12, color: '#555', marginBottom: 6 }}>{downloadPhase}</div>}
+              <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 8, borderRadius: 6, height: 120, overflow: 'auto' }}>{terminalMsgs}</div>
             </CardBody>
           </Card>
         )}

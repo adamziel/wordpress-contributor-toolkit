@@ -5,9 +5,12 @@ const fs = require('fs');
 const fse = require('fs-extra');
 const https = require('https');
 const extract = require('extract-zip');
+const git = require('isomorphic-git');
+const http = require('isomorphic-git/http/node');
 const { spawn } = require('child_process');
 
 const WORDPRESS_ZIP_URL = 'https://github.com/WordPress/wordpress-develop/archive/refs/heads/trunk.zip';
+const WORDPRESS_GIT_URL = 'https://github.com/WordPress/wordpress-develop.git';
 
 let store; // initialized asynchronously due to ESM-only module
 const storeReady = import('electron-store').then((m) => {
@@ -98,37 +101,41 @@ ipcMain.handle('wordpress:setup', async (event, destDir) => {
 
 	await fse.ensureDir(destDir);
 
-	const tmpZipPath = path.join(os.tmpdir(), `wordpress-develop-trunk-${Date.now()}.zip`);
-
-	event.sender.send('download:status', { phase: 'downloading', target: destDir });
-	await downloadFile(WORDPRESS_ZIP_URL, tmpZipPath, (progress) => {
-		event.sender.send('download:progress', { ...progress, target: destDir });
-	});
-
-	event.sender.send('download:status', { phase: 'unzipping', target: destDir });
-	await extract(tmpZipPath, { dir: destDir });
-
+	// Perform shallow clone of trunk into a subfolder named 'wordpress-develop-trunk'
+	const siteDir = path.join(destDir, 'wordpress-develop-trunk');
+	await fse.ensureDir(siteDir);
+	event.sender.send('download:status', { phase: 'cloning', target: destDir });
 	try {
-		fs.unlinkSync(tmpZipPath);
-	} catch {}
-
-	// The zip extracts into 'wordpress-develop-trunk'
-	const extractedDir = path.join(destDir, 'wordpress-develop-trunk');
-	if (fs.existsSync(extractedDir)) {
-		// remember extracted dir
-		const s = await getStore();
-		const sites = s.get('sites');
-		if (!sites.includes(extractedDir)) {
-			sites.push(extractedDir);
-			s.set('sites', sites);
-			const meta = s.get('siteMeta');
-			meta[extractedDir] = { initialized: false, createdAt: new Date().toISOString() };
-			s.set('siteMeta', meta);
-		}
-		event.sender.send('download:status', { phase: 'done', target: destDir, sitePath: extractedDir });
-		return extractedDir;
+		await git.clone({
+			http,
+			fs,
+			url: WORDPRESS_GIT_URL,
+			dir: siteDir,
+			singleBranch: true,
+			depth: 1,
+			ref: 'trunk',
+			onProgress: (evt) => {
+				// evt: {phase,total,loaded,lengthComputable} - forward as terminal-like output
+				const msg = `${evt.phase || 'clone'} ${evt.loaded || 0}/${evt.total || 0}`;
+				event.sender.send('download:progress', { target: destDir, message: msg });
+			}
+		});
+	} catch (e) {
+		// Fallback/error
+		throw e;
 	}
-	return destDir;
+
+	const s = await getStore();
+	const sites = s.get('sites');
+	if (!sites.includes(siteDir)) {
+		sites.push(siteDir);
+		s.set('sites', sites);
+		const meta = s.get('siteMeta');
+		meta[siteDir] = { initialized: false, createdAt: new Date().toISOString() };
+		s.set('siteMeta', meta);
+	}
+	event.sender.send('download:status', { phase: 'done', target: destDir, sitePath: siteDir });
+	return siteDir;
 });
 
 ipcMain.handle('sites:mark-initialized', async (_e, sitePath) => {

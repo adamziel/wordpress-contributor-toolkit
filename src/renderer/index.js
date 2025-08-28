@@ -46750,48 +46750,40 @@ ${name} exited with code ${code}
   }
   function App() {
     const { sites, siteMeta, refresh, setSiteMeta, setSites } = useSites();
-    const [downloading, setDownloading] = (0, import_react66.useState)(false);
-    const [downloadPct, setDownloadPct] = (0, import_react66.useState)(0);
     const [downloadPhase, setDownloadPhase] = (0, import_react66.useState)("");
     const [pendingSite, setPendingSite] = (0, import_react66.useState)(null);
+    const [terminalMsgs, setTerminalMsgs] = (0, import_react66.useState)("");
     (0, import_react66.useEffect)(() => {
-      const progressHandler = (_e, p) => {
-        if (!p || typeof p.percent !== "number") return;
-        setDownloading(true);
-        setDownloadPct(Math.round(p.percent));
-        setPendingSite((prev2) => prev2 || { targetDir: p.target });
-      };
-      const statusHandler = (_e, s) => {
+      const unsubProg = window.api.subscribeSetupProgress((p) => {
+        if (p && p.message) setTerminalMsgs((v) => v + p.message + "\n");
+        if (p && p.target) setPendingSite((prev2) => prev2 || { targetDir: p.target });
+      });
+      const unsubStat = window.api.subscribeSetupStatus((s) => {
         if (!s) return;
         setPendingSite((prev2) => prev2 || { targetDir: s.target });
-        if (s.phase === "downloading") setDownloadPhase("Downloading WordPress\u2026");
-        if (s.phase === "unzipping") setDownloadPhase("Unzipping\u2026");
-        if (s.phase === "done") {
-          setDownloading(false);
-          setDownloadPct(100);
+        if (s.phase === "cloning") setDownloadPhase("Cloning repository\u2026");
+        else if (s.phase === "unzipping") setDownloadPhase("Unzipping\u2026");
+        else if (s.phase === "downloading") setDownloadPhase("Downloading\u2026");
+        else if (s.phase === "done") {
           setDownloadPhase("");
           setPendingSite(null);
+          setTerminalMsgs("");
         }
-      };
-      const { ipcRenderer } = window.require ? window.require("electron") : { ipcRenderer: null };
-      ipcRenderer?.on?.("download:progress", progressHandler);
-      ipcRenderer?.on?.("download:status", statusHandler);
+      });
       return () => {
-        ipcRenderer?.removeListener?.("download:progress", progressHandler);
-        ipcRenderer?.removeListener?.("download:status", statusHandler);
+        unsubProg && unsubProg();
+        unsubStat && unsubStat();
       };
     }, []);
     const chooseAndSetup = (0, import_react66.useCallback)(async () => {
       const dir = await window.api.chooseDirectory();
       if (!dir) return;
       try {
-        setDownloading(true);
-        setDownloadPct(0);
+        setTerminalMsgs("");
         setPendingSite({ targetDir: dir });
         await window.api.setupWordPress(dir);
         await refresh();
       } catch (e) {
-        setDownloading(false);
         setPendingSite(null);
         alert(String(e));
       }
@@ -46815,8 +46807,8 @@ ${name} exited with code ${code}
       /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { id: "sites", children: [
         pendingSite && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default6, { style: { marginBottom: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default8, { children: [
           /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { fontWeight: 600 }, children: "Setting up new site\u2026" }),
-          /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { marginTop: 8, background: "#eee", borderRadius: 4, overflow: "hidden", height: 10 }, children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { width: `${downloadPct}%`, height: "100%", background: "#007cba", transition: "width 0.2s" } }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { fontSize: 12, color: "#555", marginTop: 4 }, children: downloadPhase || `Downloading\u2026 ${downloadPct}%` })
+          downloadPhase && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { fontSize: 12, color: "#555", marginBottom: 6 }, children: downloadPhase }),
+          /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 8, borderRadius: 6, height: 120, overflow: "auto" }, children: terminalMsgs })
         ] }) }),
         sites.length > 0 ? sites.map((s) => /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
           SiteRow,

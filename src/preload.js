@@ -50,6 +50,18 @@ contextBridge.exposeInMainWorld('api', {
 ,
 	deleteSite: (sitePath) => ipcRenderer.invoke('sites:delete', sitePath)
 ,
+	subscribeSetupProgress: (handler) => {
+		const h = (_e, payload) => handler && handler(payload);
+		ipcRenderer.on('download:progress', h);
+		return () => ipcRenderer.removeListener('download:progress', h);
+	}
+,
+	subscribeSetupStatus: (handler) => {
+		const h = (_e, payload) => handler && handler(payload);
+		ipcRenderer.on('download:status', h);
+		return () => ipcRenderer.removeListener('download:status', h);
+	}
+,
 	startWpDebug: async (sitePath, onData) => {
 		const handler = (_e, payload) => {
 			if (payload.sitePath === sitePath) onData && onData(payload.data);
