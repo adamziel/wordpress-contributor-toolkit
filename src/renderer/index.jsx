@@ -80,7 +80,7 @@ function App() {
       <Flex align="center" justify="space-between" style={{ marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>WordPress Core Sites</h2>
         {sites.length > 0 ? (
-          <Button icon={plus} variant="primary" onClick={chooseAndSetup}>Setup another site</Button>
+          <Button icon={plus} variant="primary" onClick={chooseAndSetup}>Create WordPress Core site</Button>
         ) : null}
       </Flex>
 
@@ -155,9 +155,7 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
     setIsPatchOpen(true);
     setPatchText('Generating patch…');
     try {
-      console.log('getPatch',sitePath)
       const res = await window.api.getPatch(sitePath);
-      console.log({res})
       if (res && res.ok) setPatchText((res.patch && res.patch.trim().length) ? res.patch : 'No changes.');
       else setPatchText(res && res.error ? `Error: ${res.error}` : 'Failed to generate patch');
     } catch (e) {
@@ -175,11 +173,10 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
         <Flex align="center" justify="space-between">
           <div style={{ fontWeight: 600 }}>{siteName}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Button variant="secondary" onClick={openPatchModal}>Create patch</Button>
             <div style={{ fontSize: 12, color: '#666' }}>
               {initialized ? 'Initialized' : 'Uninitialized'}{createdLabel ? ` • Created ${createdLabel}` : ''}
             </div>
-            <DropdownMenu label="More" text="⋮" controls={[{ title:'Forget this site', onClick:()=>confirmAnd('Remove this site from the list?', ()=>onForget(sitePath)) },{ title:'Delete this site', onClick:()=>confirmAnd('Delete this site from disk? This cannot be undone.', ()=>onDelete(sitePath)) }]} />
+            <DropdownMenu label="More" text="" controls={[{ title:'Forget this site', onClick:()=>confirmAnd('Remove this site from the list?', ()=>onForget(sitePath)) },{ title:'Delete this site', onClick:()=>confirmAnd('Delete this site from disk? This cannot be undone.', ()=>onDelete(sitePath)) }]} />
           </div>
         </Flex>
         <div className="path" style={{ marginTop: 4, fontFamily: 'Menlo, monospace', fontSize: 12, color: '#333', wordBreak: 'break-all' }}><span style={{ color: '#666' }}>Path:</span> {sitePath}</div>
@@ -187,8 +184,14 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
           {!initialized ? (<FlexItem><Button isBusy={installing} variant="primary" onClick={runInstall}>Install dependencies</Button></FlexItem>) : null}
           <FlexItem><Button variant="secondary" onClick={()=>window.api.openDirectory(sitePath)}>Open directory</Button></FlexItem>
           {initialized ? (<>
+            <FlexItem>
+              <Button isBusy={starting} variant={running ? 'secondary' : 'primary'} onClick={toggleDevServer}>{running ? 'Stop dev server' : 'Start dev server'}</Button>
+              {starting || serverUrl ? (
+                <span style={{ marginLeft: 8 }}>{starting ? 'Starting...' : serverUrl ? (<a href={serverUrl} onClick={(e) => { e.preventDefault(); window.api.openExternal(serverUrl); }}>{serverUrl}</a>) : null}</span>
+              ) : null}
+            </FlexItem>
+            <FlexItem><Button variant="secondary" onClick={openPatchModal}>Create patch</Button></FlexItem>
             <FlexItem><DropdownMenu icon={chevronDown} label="Run command" text="Run command" controls={[{title:'npm run build',onClick:()=>runScript('build')},{title:'npm run build:dev',onClick:()=>runScript('build:dev')},{title:'npm run dev',onClick:()=>runScript('dev')},{title:'npm run test',onClick:()=>runScript('test')},{title:'npm run watch',onClick:()=>runScript('watch')},{title:'npm run grunt',onClick:()=>runScript('grunt')},{title:'Kill running command',onClick:killCurrent}]}/></FlexItem>
-            <FlexItem><Button isBusy={starting} variant={running?'secondary':'primary'} onClick={toggleDevServer}>{running?'Stop dev server':'Start dev server'}</Button><span style={{ marginLeft: 8 }}>{starting?'Starting...':serverUrl?(<a href={serverUrl} onClick={(e)=>{e.preventDefault();window.api.openExternal(serverUrl);}}>{serverUrl}</a>):null}</span></FlexItem>
           </>):null}
         </Flex>
         <div style={{ marginTop: 12 }}>

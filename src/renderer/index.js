@@ -47111,7 +47111,7 @@ If there's a particular need for this, please submit a feature request at https:
     return /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { style: { margin: 16, fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" }, children: [
       /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(component_default3, { align: "center", justify: "space-between", style: { marginBottom: 12 }, children: [
         /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("h2", { style: { margin: 0 }, children: "WordPress Core Sites" }),
-        sites.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { icon: plus_default, variant: "primary", onClick: chooseAndSetup, children: "Setup another site" }) : null
+        sites.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { icon: plus_default, variant: "primary", onClick: chooseAndSetup, children: "Create WordPress Core site" }) : null
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { id: "sites", children: [
         pendingSite && /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default7, { style: { marginBottom: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(component_default9, { children: [
@@ -47228,9 +47228,7 @@ ${name} exited with code ${code}
       setIsPatchOpen(true);
       setPatchText("Generating patch\u2026");
       try {
-        console.log("getPatch", sitePath);
         const res = await window.api.getPatch(sitePath);
-        console.log({ res });
         if (res && res.ok) setPatchText(res.patch && res.patch.trim().length ? res.patch : "No changes.");
         else setPatchText(res && res.error ? `Error: ${res.error}` : "Failed to generate patch");
       } catch (e) {
@@ -47247,12 +47245,11 @@ ${name} exited with code ${code}
       /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(component_default3, { align: "center", justify: "space-between", children: [
         /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { fontWeight: 600 }, children: siteName }),
         /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { variant: "secondary", onClick: openPatchModal, children: "Create patch" }),
           /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { style: { fontSize: 12, color: "#666" }, children: [
             initialized ? "Initialized" : "Uninitialized",
             createdLabel ? ` \u2022 Created ${createdLabel}` : ""
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(dropdown_menu_default, { label: "More", text: "\u22EE", controls: [{ title: "Forget this site", onClick: () => confirmAnd("Remove this site from the list?", () => onForget(sitePath)) }, { title: "Delete this site", onClick: () => confirmAnd("Delete this site from disk? This cannot be undone.", () => onDelete(sitePath)) }] })
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(dropdown_menu_default, { label: "More", text: "", controls: [{ title: "Forget this site", onClick: () => confirmAnd("Remove this site from the list?", () => onForget(sitePath)) }, { title: "Delete this site", onClick: () => confirmAnd("Delete this site from disk? This cannot be undone.", () => onDelete(sitePath)) }] })
         ] })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { className: "path", style: { marginTop: 4, fontFamily: "Menlo, monospace", fontSize: 12, color: "#333", wordBreak: "break-all" }, children: [
@@ -47264,14 +47261,15 @@ ${name} exited with code ${code}
         !initialized ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { isBusy: installing, variant: "primary", onClick: runInstall, children: "Install dependencies" }) }) : null,
         /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { variant: "secondary", onClick: () => window.api.openDirectory(sitePath), children: "Open directory" }) }),
         initialized ? /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(import_jsx_runtime54.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(dropdown_menu_default, { icon: chevron_down_default, label: "Run command", text: "Run command", controls: [{ title: "npm run build", onClick: () => runScript("build") }, { title: "npm run build:dev", onClick: () => runScript("build:dev") }, { title: "npm run dev", onClick: () => runScript("dev") }, { title: "npm run test", onClick: () => runScript("test") }, { title: "npm run watch", onClick: () => runScript("watch") }, { title: "npm run grunt", onClick: () => runScript("grunt") }, { title: "Kill running command", onClick: killCurrent }] }) }),
           /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(component_default4, { children: [
             /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { isBusy: starting, variant: running ? "secondary" : "primary", onClick: toggleDevServer, children: running ? "Stop dev server" : "Start dev server" }),
-            /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("span", { style: { marginLeft: 8 }, children: starting ? "Starting..." : serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("a", { href: serverUrl, onClick: (e) => {
+            starting || serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("span", { style: { marginLeft: 8 }, children: starting ? "Starting..." : serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("a", { href: serverUrl, onClick: (e) => {
               e.preventDefault();
               window.api.openExternal(serverUrl);
-            }, children: serverUrl }) : null })
-          ] })
+            }, children: serverUrl }) : null }) : null
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { variant: "secondary", onClick: openPatchModal, children: "Create patch" }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(dropdown_menu_default, { icon: chevron_down_default, label: "Run command", text: "Run command", controls: [{ title: "npm run build", onClick: () => runScript("build") }, { title: "npm run build:dev", onClick: () => runScript("build:dev") }, { title: "npm run dev", onClick: () => runScript("dev") }, { title: "npm run test", onClick: () => runScript("test") }, { title: "npm run watch", onClick: () => runScript("watch") }, { title: "npm run grunt", onClick: () => runScript("grunt") }, { title: "Kill running command", onClick: killCurrent }] }) })
         ] }) : null
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { marginTop: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(tab_panel_default, { className: "log-tabs", activeClass: "is-active", onSelect: (n) => {
