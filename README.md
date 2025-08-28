@@ -99,10 +99,12 @@ For cases when MySQL is required, local Playground can work with MySQL. The only
 ### Ideas and future work
 
 - Integrate Playground's XDebug.
-- Built‑in SMTP catcher for local email testing.
 - Explore bundling MySQL server with the app.
+- Built‑in SMTP catcher for local email testing.
 - Migrate to the PHP Git client in https://github.com/wordpress/php-toolkit.
 - Potentially integrate with Studio to benefit from PHP version selector, wp-cli integration and other Studio features.
+- An ergonomic way of managing the git repository from the UI (commit, conflicts, pushes etc.) Or would it make sense to just endorse another git client?
+- Integrate with Trac and GitHub to apply and submit patches directly. Related: [grunt-patch-wordpress](https://github.com/WordPress/grunt-patch-wordpress)
 
 ### License
 
