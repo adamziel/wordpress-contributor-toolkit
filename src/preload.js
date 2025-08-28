@@ -37,6 +37,26 @@ contextBridge.exposeInMainWorld('api', {
 		ipcRenderer.on('npm:run-script:log', logHandler);
 		ipcRenderer.on('npm:run-script:done', doneHandler);
 	}
+,
+	startServer: async (sitePath, onLog, onUrl, onStopped) => {
+		const result = await ipcRenderer.invoke('playground:start', sitePath);
+		const logHandler = (_e, payload) => {
+			if (payload.sitePath === sitePath) onLog && onLog(payload);
+		};
+		const urlHandler = (_e, payload) => {
+			if (payload.sitePath === sitePath) onUrl && onUrl(payload.url);
+		};
+		const stoppedHandler = (_e, payload) => {
+			if (payload.sitePath === sitePath) onStopped && onStopped();
+		};
+		ipcRenderer.on('playground:log', logHandler);
+		ipcRenderer.on('playground:url', urlHandler);
+		ipcRenderer.on('playground:stopped', stoppedHandler);
+		return result;
+	},
+	stopServer: async (sitePath) => {
+		return await ipcRenderer.invoke('playground:stop', sitePath);
+	}
 });
 
 

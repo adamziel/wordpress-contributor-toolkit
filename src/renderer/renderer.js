@@ -11,6 +11,32 @@ function appendLog(message, type = 'stdout') {
 	logEl.scrollTop = logEl.scrollHeight;
 }
 
+const serverLogEl = (() => {
+	let el = document.getElementById('serverLog');
+	if (!el) {
+		el = document.createElement('div');
+		el.id = 'serverLog';
+		el.style.whiteSpace = 'pre-wrap';
+		el.style.background = '#0b1';
+		el.style.color = '#001';
+		el.style.padding = '12px';
+		el.style.borderRadius = '6px';
+		el.style.height = '180px';
+		el.style.overflow = 'auto';
+		const header = document.createElement('h3');
+		header.textContent = 'Server Logs';
+		sitesContainer.parentElement.appendChild(header);
+		sitesContainer.parentElement.appendChild(el);
+	}
+	return el;
+})();
+
+function appendServerLog(sitePath, message, type = 'stdout') {
+	const prefix = type === 'stderr' ? 'ERR ' : '';
+	serverLogEl.textContent += `[${sitePath}] ${prefix}${message}`;
+	serverLogEl.scrollTop = serverLogEl.scrollHeight;
+}
+
 async function refreshSites() {
 	const sites = await window.api.getSites();
 	sitesContainer.innerHTML = '';
@@ -22,6 +48,7 @@ async function refreshSites() {
 			<div style="margin-top:6px;">
 				<button class="npmInstall">npm install</button>
 				<button class="openDir">open directory</button>
+				<span class="serverUrl"></span>
 			</div>
 		`;
 		div.querySelector('.npmInstall').addEventListener('click', async () => {
@@ -36,7 +63,38 @@ async function refreshSites() {
 			await window.api.openDirectory(sitePath);
 		});
 
-		// Add npm script buttons row after existing controls
+		// Add server controls per site
+		const serverControls = document.createElement('div');
+		serverControls.style.marginTop = '6px';
+		const runBtn = document.createElement('button');
+		runBtn.textContent = 'Run server';
+		const stopBtn = document.createElement('button');
+		stopBtn.textContent = 'Stop server';
+		const serverUrlSpan = div.querySelector('.serverUrl');
+		serverControls.appendChild(runBtn);
+		serverControls.appendChild(stopBtn);
+		div.appendChild(serverControls);
+
+		runBtn.addEventListener('click', async () => {
+			serverUrlSpan.textContent = 'Starting...';
+			await window.api.startServer(sitePath, (payload) => {
+				appendServerLog(payload.sitePath, payload.data, payload.type);
+			}, (url) => {
+				serverUrlSpan.innerHTML = '';
+				const a = document.createElement('a');
+				a.href = url;
+				a.textContent = url + 'wordpress';
+				a.target = '_blank';
+				serverUrlSpan.appendChild(a);
+			}, () => {
+				serverUrlSpan.textContent = 'Stopped';
+			});
+		});
+		stopBtn.addEventListener('click', async () => {
+			await window.api.stopServer(sitePath);
+		});
+
+		// Add npm script buttons row
 		const scripts = [
 			{ name: 'build', label: 'npm run build' },
 			{ name: 'build:dev', label: 'npm run build:dev' },

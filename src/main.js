@@ -27,6 +27,8 @@ async function getStore() {
 const runningInstalls = {};
 /** @type {Record<string, import('child_process').ChildProcess>} */
 const runningScripts = {};
+/** @type {Record<string, { child: import('child_process').ChildProcess, url?: string }>} */
+const playgroundServers = {};
 
 function createWindow() {
 	const mainWindow = new BrowserWindow({
@@ -175,6 +177,72 @@ ipcMain.handle('npm:run-script', async (event, directoryPath, scriptName, script
 	});
 
 	return { runId };
+});
+
+ipcMain.handle('playground:start', async (event, sitePath) => {
+	const buildDir = path.join(sitePath, 'build');
+	if (playgroundServers[sitePath]?.child) {
+		return { ok: true, url: playgroundServers[sitePath].url };
+	}
+	const runnerPath = path.join(__dirname, 'server-runner.js');
+	const child = spawn(process.execPath, [runnerPath, buildDir], {
+		cwd: buildDir,
+		env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+		shell: false
+	});
+	playgroundServers[sitePath] = { child };
+	let resolved = false;
+	child.stdout.setEncoding('utf8');
+	child.stderr.setEncoding('utf8');
+	child.stdout.on('data', (data) => {
+		const text = String(data);
+		console.log("STDOUT", text);
+		event.sender.send('playground:log', { sitePath, type: 'stdout', data: text });
+		const match = text.match(/SERVER_URL:(.*)/);
+		if (match && !resolved) {
+			resolved = true;
+			playgroundServers[sitePath].url = match[1].trim();
+			console.log("URL", playgroundServers[sitePath].url);
+			event.sender.send('playground:url', { sitePath, url: playgroundServers[sitePath].url });
+		}
+	});
+	child.stderr.on('data', (data) => {
+		console.log("STDERR", data);
+		event.sender.send('playground:log', { sitePath, type: 'stderr', data: String(data) });
+	});
+	child.on('error', (err) => {
+		console.log("ERROR", err);
+		event.sender.send('playground:log', { sitePath, type: 'stderr', data: String(err) + '\n' });
+	});
+	child.on('close', (code) => {
+		delete playgroundServers[sitePath];
+		event.sender.send('playground:stopped', { sitePath, code });
+	});
+
+	return new Promise((resolve) => {
+		const timeout = setTimeout(() => {
+			if (!resolved) resolve({ ok: false, error: 'Timed out starting server' });
+		}, 20000);
+		const urlListener = (_e, payload) => {
+			if (payload.sitePath === sitePath) {
+				clearTimeout(timeout);
+				ipcMain.removeListener('playground:url', urlListener);
+				resolve({ ok: true, url: payload.url });
+			}
+		};
+		ipcMain.on('playground:url', urlListener);
+	});
+});
+
+ipcMain.handle('playground:stop', async (_event, sitePath) => {
+	const server = playgroundServers[sitePath];
+	if (!server?.child) return { ok: true };
+	try {
+		server.child.kill();
+		return { ok: true };
+	} catch (e) {
+		return { ok: false, error: String(e) };
+	}
 });
 
 function downloadFile(url, dest, onProgress) {
