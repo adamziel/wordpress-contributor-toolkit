@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'"> 
+  <title>Electron WordPress Setup</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif; margin: 16px; }
+    button { margin-right: 8px; }
+    .row { margin-bottom: 12px; }
+    #sites { margin-top: 16px; }
+    .site { border: 1px solid #ddd; padding: 8px; margin-bottom: 8px; border-radius: 6px; }
+    .path { font-family: Menlo, monospace; font-size: 12px; color: #333; word-break: break-all; }
+    #log { white-space: pre-wrap; background: #111; color: #eee; padding: 12px; border-radius: 6px; height: 220px; overflow: auto; }
+  </style>
+  <script defer src="renderer.js"></script>
+  <script>window.addEventListener('error', e => { console.error(e.error || e.message) })</script>
+  <script>window.addEventListener('unhandledrejection', e => { console.error(e.reason) })</script>
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="Referrer-Policy" content="no-referrer" />
+  <meta http-equiv="Cross-Origin-Resource-Policy" content="same-site" />
+  <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
+  <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
+  <meta http-equiv="Permissions-Policy" content="clipboard-read=(self), clipboard-write=(self)" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="referrer" content="no-referrer" />
+</head>
+<body>
+  <h2>WordPress Core Setup</h2>
+  <div class="row">
+    <button id="chooseDirBtn">Setup WordPress file structure…</button>
+    <span id="downloadStatus"></span>
+  </div>
+
+  <h3>Sites</h3>
+  <div id="sites"></div>
+
+  <h3>Logs</h3>
+  <div id="log"></div>
+</body>
+</html>
+
+

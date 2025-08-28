@@ -1,0 +1,40 @@
+const path = require('path');
+
+async function main() {
+	const targetDir = process.argv[2];
+	const scriptName = process.argv[3];
+	const scriptArgs = process.argv.slice(4);
+	if (!targetDir || !scriptName) {
+		console.error('Usage: script-runner <dir> <script> [args...]');
+		process.exit(1);
+	}
+
+	process.chdir(path.resolve(targetDir));
+
+	try {
+		const npmPkgJsonPath = require.resolve('npm/package.json');
+		const npmRootDir = path.dirname(npmPkgJsonPath);
+		const npmCliAbsPath = path.join(npmRootDir, 'bin', 'npm-cli.js');
+
+		// argv for npm run-script: node npm run <script> -- <args>
+		process.argv = [
+			process.execPath,
+			'npm',
+			'run',
+			scriptName,
+			'--',
+			...scriptArgs
+		];
+		process.env.npm_config_loglevel = process.env.npm_config_loglevel || 'verbose';
+		process.env.npm_config_progress = 'false';
+
+		require(npmCliAbsPath);
+	} catch (err) {
+		console.error(err && err.stack ? err.stack : String(err));
+		process.exit(1);
+	}
+}
+
+main();
+
+
