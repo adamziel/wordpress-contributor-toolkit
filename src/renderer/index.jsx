@@ -21,7 +21,7 @@ function useSites() {
     setSiteMeta(meta || {});
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
-  return { sites, siteMeta, refresh, setSiteMeta };
+  return { sites, siteMeta, refresh, setSiteMeta, setSites };
 }
 
 function LogPanel({ title, bg = '#111', color = '#eee' }) {
@@ -38,7 +38,7 @@ function LogPanel({ title, bg = '#111', color = '#eee' }) {
   );
 }
 
-function SiteRow({ sitePath, initialized, createdAt, onInitialized, onServerLog, onWpLog }) {
+function SiteRow({ sitePath, initialized, createdAt, onInitialized, onServerLog, onWpLog, onForget, onDelete }) {
   const [serverUrl, setServerUrl] = useState('');
   const [starting, setStarting] = useState(false);
   const [running, setRunning] = useState(false);
@@ -101,14 +101,30 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onServerLog,
     toggleServer();
   }
 
+  const confirmAnd = async (message, action) => {
+    if (window.confirm(message)) {
+      await action();
+    }
+  };
+
   return (
     <Card style={{ marginBottom: 12 }}>
       <CardBody>
         <Flex align="center" justify="space-between">
           <div style={{ fontWeight: 600 }}>{siteName}</div>
-          <div style={{ fontSize: 12, color: '#666' }}>
-            {initialized ? 'Initialized' : 'Uninitialized'}
-            {createdLabel ? ` • Created ${createdLabel}` : ''}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 12, color: '#666' }}>
+              {initialized ? 'Initialized' : 'Uninitialized'}
+              {createdLabel ? ` • Created ${createdLabel}` : ''}
+            </div>
+            <DropdownMenu
+              label="More"
+              text="⋮"
+              controls={[
+                { title: 'Forget this site', onClick: () => confirmAnd('Remove this site from the list?', () => onForget(sitePath)) },
+                { title: 'Delete this site', onClick: () => confirmAnd('Delete this site from disk? This cannot be undone.', () => onDelete(sitePath)) },
+              ]}
+            />
           </div>
         </Flex>
         <div className="path" style={{ marginTop: 4, fontFamily: 'Menlo, monospace', fontSize: 12, color: '#333', wordBreak: 'break-all' }}>
@@ -157,24 +173,44 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onServerLog,
 }
 
 function App() {
-  const { sites, siteMeta, refresh, setSiteMeta } = useSites();
+  const { sites, siteMeta, refresh, setSiteMeta, setSites } = useSites();
   const [logs, setLogs] = useState('');
   const [serverLogs, setServerLogs] = useState('');
   const [wpLogs, setWpLogs] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [downloadPct, setDownloadPct] = useState(0);
+  const [downloadPhase, setDownloadPhase] = useState('');
+  const [pendingSite, setPendingSite] = useState(null); // { targetDir, sitePath? }
   const appendLog = useCallback((s) => setLogs((v) => v + s), []);
   const appendServerLog = useCallback((s) => setServerLogs((v) => v + s), []);
   const appendWpLog = useCallback((s) => setWpLogs((v) => v + s), []);
 
   useEffect(() => {
-    const handler = (_e, p) => {
+    const progressHandler = (_e, p) => {
       if (!p || typeof p.percent !== 'number') return;
       setDownloading(true);
       setDownloadPct(Math.round(p.percent));
+      setPendingSite((prev) => prev || { targetDir: p.target });
     };
-    window.require?.('electron')?.ipcRenderer?.on?.('download:progress', handler);
-    return () => window.require?.('electron')?.ipcRenderer?.removeListener?.('download:progress', handler);
+    const statusHandler = (_e, s) => {
+      if (!s) return;
+      setPendingSite((prev) => prev || { targetDir: s.target });
+      if (s.phase === 'downloading') setDownloadPhase('Downloading WordPress…');
+      if (s.phase === 'unzipping') setDownloadPhase('Unzipping…');
+      if (s.phase === 'done') {
+        setDownloading(false);
+        setDownloadPct(100);
+        setDownloadPhase('');
+        setPendingSite(null);
+      }
+    };
+    const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
+    ipcRenderer?.on?.('download:progress', progressHandler);
+    ipcRenderer?.on?.('download:status', statusHandler);
+    return () => {
+      ipcRenderer?.removeListener?.('download:progress', progressHandler);
+      ipcRenderer?.removeListener?.('download:status', statusHandler);
+    };
   }, []);
 
   const chooseAndSetup = useCallback(async () => {
@@ -183,12 +219,12 @@ function App() {
     try {
       setDownloading(true);
       setDownloadPct(0);
+      setPendingSite({ targetDir: dir });
       const sitePath = await window.api.setupWordPress(dir);
-      setDownloading(false);
-      setDownloadPct(100);
       await refresh();
     } catch (e) {
       setDownloading(false);
+      setPendingSite(null);
       appendLog(String(e));
     }
   }, [refresh, appendLog]);
@@ -196,6 +232,16 @@ function App() {
   const onInitialized = useCallback((sitePath) => {
     setSiteMeta((m) => ({ ...(m || {}), [sitePath]: { ...(m?.[sitePath] || {}), initialized: true } }));
   }, [setSiteMeta]);
+
+  const onForget = useCallback(async (sitePath) => {
+    await window.api.forgetSite(sitePath);
+    await refresh();
+  }, [refresh]);
+
+  const onDelete = useCallback(async (sitePath) => {
+    await window.api.deleteSite(sitePath);
+    await refresh();
+  }, [refresh]);
 
   return (
     <div style={{ margin: 16, fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif' }}>
@@ -206,16 +252,19 @@ function App() {
         ) : null}
       </Flex>
 
-      {downloading && (
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ background: '#eee', borderRadius: 4, overflow: 'hidden', height: 10 }}>
-            <div style={{ width: `${downloadPct}%`, height: '100%', background: '#007cba', transition: 'width 0.2s' }} />
-          </div>
-          <div style={{ fontSize: 12, color: '#555', marginTop: 4 }}>{downloadPct}%</div>
-        </div>
-      )}
-
       <div id="sites">
+        {pendingSite && (
+          <Card style={{ marginBottom: 12 }}>
+            <CardBody>
+              <div style={{ fontWeight: 600 }}>Setting up new site…</div>
+              <div style={{ marginTop: 8, background: '#eee', borderRadius: 4, overflow: 'hidden', height: 10 }}>
+                <div style={{ width: `${downloadPct}%`, height: '100%', background: '#007cba', transition: 'width 0.2s' }} />
+              </div>
+              <div style={{ fontSize: 12, color: '#555', marginTop: 4 }}>{downloadPhase || `Downloading… ${downloadPct}%`}</div>
+            </CardBody>
+          </Card>
+        )}
+
         {sites.length > 0 ? (
           sites.map((s) => (
             <SiteRow
@@ -226,6 +275,8 @@ function App() {
               onInitialized={onInitialized}
               onServerLog={appendServerLog}
               onWpLog={appendWpLog}
+              onForget={onForget}
+              onDelete={onDelete}
             />
           ))
         ) : (

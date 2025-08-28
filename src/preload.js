@@ -43,6 +43,10 @@ contextBridge.exposeInMainWorld('api', {
 ,
 	markSiteInitialized: (sitePath) => ipcRenderer.invoke('sites:mark-initialized', sitePath)
 ,
+	forgetSite: (sitePath) => ipcRenderer.invoke('sites:forget', sitePath)
+,
+	deleteSite: (sitePath) => ipcRenderer.invoke('sites:delete', sitePath)
+,
 	startWpDebug: async (sitePath, onData) => {
 		const handler = (_e, payload) => {
 			if (payload.sitePath === sitePath) onData && onData(payload.data);

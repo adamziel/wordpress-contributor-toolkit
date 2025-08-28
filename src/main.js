@@ -98,10 +98,12 @@ ipcMain.handle('wordpress:setup', async (event, destDir) => {
 
 	const tmpZipPath = path.join(os.tmpdir(), `wordpress-develop-trunk-${Date.now()}.zip`);
 
+	event.sender.send('download:status', { phase: 'downloading', target: destDir });
 	await downloadFile(WORDPRESS_ZIP_URL, tmpZipPath, (progress) => {
-		event.sender.send('download:progress', progress);
+		event.sender.send('download:progress', { ...progress, target: destDir });
 	});
 
+	event.sender.send('download:status', { phase: 'unzipping', target: destDir });
 	await extract(tmpZipPath, { dir: destDir });
 
 	try {
@@ -121,6 +123,7 @@ ipcMain.handle('wordpress:setup', async (event, destDir) => {
 			meta[extractedDir] = { initialized: false, createdAt: new Date().toISOString() };
 			s.set('siteMeta', meta);
 		}
+		event.sender.send('download:status', { phase: 'done', target: destDir, sitePath: extractedDir });
 		return extractedDir;
 	}
 	return destDir;
@@ -131,6 +134,27 @@ ipcMain.handle('sites:mark-initialized', async (_e, sitePath) => {
 	const meta = s.get('siteMeta');
 	meta[sitePath] = { ...(meta[sitePath] || {}), initialized: true };
 	s.set('siteMeta', meta);
+	return true;
+});
+
+ipcMain.handle('sites:forget', async (_e, sitePath) => {
+	const s = await getStore();
+	const sites = s.get('sites').filter((p) => p !== sitePath);
+	s.set('sites', sites);
+	const meta = s.get('siteMeta');
+	delete meta[sitePath];
+	s.set('siteMeta', meta);
+	return true;
+});
+
+ipcMain.handle('sites:delete', async (_e, sitePath) => {
+	const s = await getStore();
+	const sites = s.get('sites').filter((p) => p !== sitePath);
+	s.set('sites', sites);
+	const meta = s.get('siteMeta');
+	delete meta[sitePath];
+	s.set('siteMeta', meta);
+	try { await fse.remove(sitePath); } catch {}
 	return true;
 });
 

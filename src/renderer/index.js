@@ -46569,9 +46569,9 @@ If there's a particular need for this, please submit a feature request at https:
     (0, import_react66.useEffect)(() => {
       refresh();
     }, [refresh]);
-    return { sites, siteMeta, refresh, setSiteMeta };
+    return { sites, siteMeta, refresh, setSiteMeta, setSites };
   }
-  function SiteRow({ sitePath, initialized, createdAt, onInitialized, onServerLog, onWpLog }) {
+  function SiteRow({ sitePath, initialized, createdAt, onInitialized, onServerLog, onWpLog, onForget, onDelete }) {
     const [serverUrl, setServerUrl] = (0, import_react66.useState)("");
     const [starting, setStarting] = (0, import_react66.useState)(false);
     const [running, setRunning] = (0, import_react66.useState)(false);
@@ -46632,12 +46632,30 @@ ${name} exited with code ${code}
       }
       toggleServer();
     };
+    const confirmAnd = async (message, action) => {
+      if (window.confirm(message)) {
+        await action();
+      }
+    };
     return /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default6, { style: { marginBottom: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default8, { children: [
       /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default3, { align: "center", justify: "space-between", children: [
         /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { fontWeight: 600 }, children: siteName }),
-        /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { style: { fontSize: 12, color: "#666" }, children: [
-          initialized ? "Initialized" : "Uninitialized",
-          createdLabel ? ` \u2022 Created ${createdLabel}` : ""
+        /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { style: { fontSize: 12, color: "#666" }, children: [
+            initialized ? "Initialized" : "Uninitialized",
+            createdLabel ? ` \u2022 Created ${createdLabel}` : ""
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
+            dropdown_menu_default,
+            {
+              label: "More",
+              text: "\u22EE",
+              controls: [
+                { title: "Forget this site", onClick: () => confirmAnd("Remove this site from the list?", () => onForget(sitePath)) },
+                { title: "Delete this site", onClick: () => confirmAnd("Delete this site from disk? This cannot be undone.", () => onDelete(sitePath)) }
+              ]
+            }
+          )
         ] })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { className: "path", style: { marginTop: 4, fontFamily: "Menlo, monospace", fontSize: 12, color: "#333", wordBreak: "break-all" }, children: [
@@ -46677,23 +46695,43 @@ ${name} exited with code ${code}
     ] }) });
   }
   function App() {
-    const { sites, siteMeta, refresh, setSiteMeta } = useSites();
+    const { sites, siteMeta, refresh, setSiteMeta, setSites } = useSites();
     const [logs, setLogs] = (0, import_react66.useState)("");
     const [serverLogs, setServerLogs] = (0, import_react66.useState)("");
     const [wpLogs, setWpLogs] = (0, import_react66.useState)("");
     const [downloading, setDownloading] = (0, import_react66.useState)(false);
     const [downloadPct, setDownloadPct] = (0, import_react66.useState)(0);
+    const [downloadPhase, setDownloadPhase] = (0, import_react66.useState)("");
+    const [pendingSite, setPendingSite] = (0, import_react66.useState)(null);
     const appendLog = (0, import_react66.useCallback)((s) => setLogs((v) => v + s), []);
     const appendServerLog = (0, import_react66.useCallback)((s) => setServerLogs((v) => v + s), []);
     const appendWpLog = (0, import_react66.useCallback)((s) => setWpLogs((v) => v + s), []);
     (0, import_react66.useEffect)(() => {
-      const handler = (_e, p) => {
+      const progressHandler = (_e, p) => {
         if (!p || typeof p.percent !== "number") return;
         setDownloading(true);
         setDownloadPct(Math.round(p.percent));
+        setPendingSite((prev2) => prev2 || { targetDir: p.target });
       };
-      window.require?.("electron")?.ipcRenderer?.on?.("download:progress", handler);
-      return () => window.require?.("electron")?.ipcRenderer?.removeListener?.("download:progress", handler);
+      const statusHandler = (_e, s) => {
+        if (!s) return;
+        setPendingSite((prev2) => prev2 || { targetDir: s.target });
+        if (s.phase === "downloading") setDownloadPhase("Downloading WordPress\u2026");
+        if (s.phase === "unzipping") setDownloadPhase("Unzipping\u2026");
+        if (s.phase === "done") {
+          setDownloading(false);
+          setDownloadPct(100);
+          setDownloadPhase("");
+          setPendingSite(null);
+        }
+      };
+      const { ipcRenderer } = window.require ? window.require("electron") : { ipcRenderer: null };
+      ipcRenderer?.on?.("download:progress", progressHandler);
+      ipcRenderer?.on?.("download:status", statusHandler);
+      return () => {
+        ipcRenderer?.removeListener?.("download:progress", progressHandler);
+        ipcRenderer?.removeListener?.("download:status", statusHandler);
+      };
     }, []);
     const chooseAndSetup = (0, import_react66.useCallback)(async () => {
       const dir = await window.api.chooseDirectory();
@@ -46701,45 +46739,55 @@ ${name} exited with code ${code}
       try {
         setDownloading(true);
         setDownloadPct(0);
+        setPendingSite({ targetDir: dir });
         const sitePath = await window.api.setupWordPress(dir);
-        setDownloading(false);
-        setDownloadPct(100);
         await refresh();
       } catch (e) {
         setDownloading(false);
+        setPendingSite(null);
         appendLog(String(e));
       }
     }, [refresh, appendLog]);
     const onInitialized = (0, import_react66.useCallback)((sitePath) => {
       setSiteMeta((m) => ({ ...m || {}, [sitePath]: { ...m?.[sitePath] || {}, initialized: true } }));
     }, [setSiteMeta]);
+    const onForget = (0, import_react66.useCallback)(async (sitePath) => {
+      await window.api.forgetSite(sitePath);
+      await refresh();
+    }, [refresh]);
+    const onDelete = (0, import_react66.useCallback)(async (sitePath) => {
+      await window.api.deleteSite(sitePath);
+      await refresh();
+    }, [refresh]);
     return /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { style: { margin: 16, fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" }, children: [
       /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default3, { align: "center", justify: "space-between", style: { marginBottom: 12 }, children: [
         /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("h2", { style: { margin: 0 }, children: "WordPress Core Sites" }),
         sites.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { icon: plus_default, variant: "primary", onClick: chooseAndSetup, children: "Setup another site" }) : null
       ] }),
-      downloading && /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { style: { marginBottom: 12 }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { background: "#eee", borderRadius: 4, overflow: "hidden", height: 10 }, children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { width: `${downloadPct}%`, height: "100%", background: "#007cba", transition: "width 0.2s" } }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { style: { fontSize: 12, color: "#555", marginTop: 4 }, children: [
-          downloadPct,
-          "%"
-        ] })
+      /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { id: "sites", children: [
+        pendingSite && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default6, { style: { marginBottom: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default8, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { fontWeight: 600 }, children: "Setting up new site\u2026" }),
+          /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { marginTop: 8, background: "#eee", borderRadius: 4, overflow: "hidden", height: 10 }, children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { width: `${downloadPct}%`, height: "100%", background: "#007cba", transition: "width 0.2s" } }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { fontSize: 12, color: "#555", marginTop: 4 }, children: downloadPhase || `Downloading\u2026 ${downloadPct}%` })
+        ] }) }),
+        sites.length > 0 ? sites.map((s) => /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
+          SiteRow,
+          {
+            sitePath: s,
+            initialized: Boolean(siteMeta?.[s]?.initialized),
+            createdAt: siteMeta?.[s]?.createdAt,
+            onInitialized,
+            onServerLog: appendServerLog,
+            onWpLog: appendWpLog,
+            onForget,
+            onDelete
+          },
+          s
+        )) : /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default6, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default8, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { marginBottom: 8 }, children: "No sites yet." }),
+          /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { icon: plus_default, variant: "primary", onClick: chooseAndSetup, children: "Setup your first site" })
+        ] }) })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { id: "sites", children: sites.length > 0 ? sites.map((s) => /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
-        SiteRow,
-        {
-          sitePath: s,
-          initialized: Boolean(siteMeta?.[s]?.initialized),
-          createdAt: siteMeta?.[s]?.createdAt,
-          onInitialized,
-          onServerLog: appendServerLog,
-          onWpLog: appendWpLog
-        },
-        s
-      )) : /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default6, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default8, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { marginBottom: 8 }, children: "No sites yet." }),
-        /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { icon: plus_default, variant: "primary", onClick: chooseAndSetup, children: "Setup your first site" })
-      ] }) }) }),
       /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { style: { marginTop: 16 }, children: [
         /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("h3", { children: "Logs" }),
         /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
