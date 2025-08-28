@@ -10,7 +10,7 @@ import {
   DropdownMenu,
   Modal
 } from '@wordpress/components';
-import { plus, chevronDown } from '@wordpress/icons';
+import { plus, chevronDown, copy as copyIcon } from '@wordpress/icons';
 import '@wordpress/components/build-style/style.css';
 
 function useSites() {
@@ -158,7 +158,7 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
       console.log('getPatch',sitePath)
       const res = await window.api.getPatch(sitePath);
       console.log({res})
-      if (res && res.ok) setPatchText(res.patch);
+      if (res && res.ok) setPatchText((res.patch && res.patch.trim().length) ? res.patch : 'No changes.');
       else setPatchText(res && res.error ? `Error: ${res.error}` : 'Failed to generate patch');
     } catch (e) {
       setPatchText(`Error: ${e && e.message ? e.message : String(e)}`);
@@ -207,10 +207,20 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
             shouldCloseOnClickOutside
             isFullScreen
           >
-            <div style={{ position:'sticky', top:0, background:'#fff', paddingBottom:8, zIndex:1 }}>
-              <Button onClick={copyPatch}>Copy</Button>
+            <div style={{ position:'relative', height:'80vh' }}>
+              <Button
+                icon={copyIcon}
+                label="Copy"
+                onClick={copyPatch}
+                style={{
+                  position:'absolute', top:8, right:8, zIndex:2,
+                  background:'#fff', border:'1px solid #ddd', color:'#111', boxShadow:'none'
+                }}
+              />
+              <pre style={{ margin:0, whiteSpace:'pre-wrap', background:'#111', color:'#eee', padding:12, borderRadius:6, height:'100%', overflow:'auto' }}>
+                {patchText && patchText.trim().length ? patchText : 'No changes.'}
+              </pre>
             </div>
-            <div style={{ whiteSpace:'pre-wrap', background:'#111', color:'#eee', padding:12, borderRadius:6, height:'80vh', overflow:'auto' }}>{patchText}</div>
           </Modal>
         )}
       </CardBody>
