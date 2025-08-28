@@ -13,7 +13,7 @@
     .path { font-family: Menlo, monospace; font-size: 12px; color: #333; word-break: break-all; }
     #log { white-space: pre-wrap; background: #111; color: #eee; padding: 12px; border-radius: 6px; height: 220px; overflow: auto; }
   </style>
-  <script defer src="renderer.js"></script>
+  <script defer src="bundle.js"></script>
   <script>window.addEventListener('error', e => { console.error(e.error || e.message) })</script>
   <script>window.addEventListener('unhandledrejection', e => { console.error(e.reason) })</script>
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
@@ -28,17 +28,7 @@
   <meta name="referrer" content="no-referrer" />
 </head>
 <body>
-  <h2>WordPress Core Setup</h2>
-  <div class="row">
-    <button id="chooseDirBtn">Setup WordPress file structure…</button>
-    <span id="downloadStatus"></span>
-  </div>
-
-  <h3>Sites</h3>
-  <div id="sites"></div>
-
-  <h3>Logs</h3>
-  <div id="log"></div>
+  <div id="root"></div>
 </body>
 </html>
 

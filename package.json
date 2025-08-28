@@ -5,7 +5,9 @@
   "description": "Electron app to setup WordPress develop structure and run npm install",
   "main": "src/main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "concurrently -k \"npm:build:watch\" \"electron .\"",
+    "build:watch": "esbuild src/renderer/index.jsx --bundle --outfile=src/renderer/bundle.js --platform=browser --format=iife --jsx=automatic --log-level=info --watch",
+    "build:once": "esbuild src/renderer/index.jsx --bundle --outfile=src/renderer/bundle.js --platform=browser --format=iife --jsx=automatic --log-level=info",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -13,10 +15,14 @@
     "electron-store": "^10.0.1",
     "extract-zip": "^2.0.1",
     "fs-extra": "^11.2.0",
-    "npm": "^10.8.2"
+    "npm": "^10.8.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "electron": "^31.3.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "esbuild": "^0.23.0",
+    "concurrently": "^8.2.2"
   }
 }
