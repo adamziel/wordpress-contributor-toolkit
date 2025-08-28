@@ -39,7 +39,6 @@ contextBridge.exposeInMainWorld('api', {
 	}
 ,
 	startServer: async (sitePath, onLog, onUrl, onStopped) => {
-		const result = await ipcRenderer.invoke('playground:start', sitePath);
 		const logHandler = (_e, payload) => {
 			if (payload.sitePath === sitePath) onLog && onLog(payload);
 		};
@@ -47,12 +46,19 @@ contextBridge.exposeInMainWorld('api', {
 			if (payload.sitePath === sitePath) onUrl && onUrl(payload.url);
 		};
 		const stoppedHandler = (_e, payload) => {
-			if (payload.sitePath === sitePath) onStopped && onStopped();
+			if (payload.sitePath === sitePath) {
+				ipcRenderer.removeListener('playground:log', logHandler);
+				ipcRenderer.removeListener('playground:url', urlHandler);
+				ipcRenderer.removeListener('playground:stopped', stoppedHandler);
+				onStopped && onStopped();
+			}
 		};
 		ipcRenderer.on('playground:log', logHandler);
 		ipcRenderer.on('playground:url', urlHandler);
 		ipcRenderer.on('playground:stopped', stoppedHandler);
-		return result;
+
+		// Invoke AFTER listeners are attached so early logs/URL are captured
+		return await ipcRenderer.invoke('playground:start', sitePath);
 	},
 	stopServer: async (sitePath) => {
 		return await ipcRenderer.invoke('playground:stop', sitePath);

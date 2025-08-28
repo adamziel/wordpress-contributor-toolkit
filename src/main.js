@@ -192,6 +192,8 @@ ipcMain.handle('playground:start', async (event, sitePath) => {
 	});
 	playgroundServers[sitePath] = { child };
 	let resolved = false;
+	let pendingResolve = null;
+	let timeoutId = null;
 	child.stdout.setEncoding('utf8');
 	child.stderr.setEncoding('utf8');
 	child.stdout.on('data', (data) => {
@@ -204,6 +206,11 @@ ipcMain.handle('playground:start', async (event, sitePath) => {
 			playgroundServers[sitePath].url = match[1].trim();
 			console.log("URL", playgroundServers[sitePath].url);
 			event.sender.send('playground:url', { sitePath, url: playgroundServers[sitePath].url });
+			if (typeof pendingResolve === 'function') {
+				clearTimeout(timeoutId);
+				pendingResolve({ ok: true, url: playgroundServers[sitePath].url });
+				pendingResolve = null;
+			}
 		}
 	});
 	child.stderr.on('data', (data) => {
@@ -220,17 +227,13 @@ ipcMain.handle('playground:start', async (event, sitePath) => {
 	});
 
 	return new Promise((resolve) => {
-		const timeout = setTimeout(() => {
-			if (!resolved) resolve({ ok: false, error: 'Timed out starting server' });
-		}, 20000);
-		const urlListener = (_e, payload) => {
-			if (payload.sitePath === sitePath) {
-				clearTimeout(timeout);
-				ipcMain.removeListener('playground:url', urlListener);
-				resolve({ ok: true, url: payload.url });
+		pendingResolve = resolve;
+		timeoutId = setTimeout(() => {
+			if (!resolved && typeof pendingResolve === 'function') {
+				pendingResolve({ ok: false, error: 'Timed out starting server' });
+				pendingResolve = null;
 			}
-		};
-		ipcMain.on('playground:url', urlListener);
+		}, 20000);
 	});
 });
 
