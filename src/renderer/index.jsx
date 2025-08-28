@@ -6,9 +6,10 @@ import {
   Card,
   CardBody,
   Flex,
-  FlexItem
+  FlexItem,
+  DropdownMenu
 } from '@wordpress/components';
-import { plus } from '@wordpress/icons';
+import { plus, chevronDown } from '@wordpress/icons';
 import '@wordpress/components/build-style/style.css';
 
 function useSites() {
@@ -82,33 +83,45 @@ function SiteRow({ sitePath, onServerLog, onWpLog }) {
     }
   }, [running, sitePath, onServerLog]);
 
+  const toggleDevServer = async () => {
+    if (!running) {
+      runScript('watch');
+    }
+    toggleServer();
+  }
+
   return (
     <Card style={{ marginBottom: 12 }}>
       <CardBody>
         <div className="path" style={{ fontFamily: 'Menlo, monospace', fontSize: 12, color: '#333', wordBreak: 'break-all' }}>{sitePath}</div>
         <Flex style={{ marginTop: 8, gap: 8 }}>
           <FlexItem>
-            <Button variant="secondary" onClick={runInstall}>npm install</Button>
-          </FlexItem>
-          <FlexItem>
-            <Button variant="secondary" onClick={() => window.api.openDirectory(sitePath)}>open directory</Button>
+            <Button variant="secondary" onClick={() => window.api.openDirectory(sitePath)}>Open directory</Button>
           </FlexItem>
           <FlexItem isBlock>
+            <Button variant={running ? 'secondary' : 'primary'} onClick={toggleDevServer}>{running ? 'Stop dev server' : 'Start dev server'}</Button>
             <span style={{ marginLeft: 8 }}>
               {starting ? 'Starting...' : serverUrl ? (
                 <a href={serverUrl} onClick={(e) => { e.preventDefault(); window.api.openExternal(serverUrl); }}>{serverUrl}</a>
               ) : null}
             </span>
           </FlexItem>
+          <FlexItem>
+            <DropdownMenu
+              icon={chevronDown}
+              label="Run command"
+              text="Run command"
+              controls={[
+                { title: 'npm run build', onClick: () => runScript('build') },
+                { title: 'npm run build:dev', onClick: () => runScript('build:dev') },
+                { title: 'npm run dev', onClick: () => runScript('dev') },
+                { title: 'npm run test', onClick: () => runScript('test') },
+                { title: 'npm run watch', onClick: () => runScript('watch') },
+                { title: 'npm run grunt', onClick: () => runScript('grunt') },
+              ]}
+            />
+          </FlexItem>
         </Flex>
-        <div style={{ marginTop: 8 }}>
-          <Button variant={running ? 'secondary' : 'primary'} onClick={toggleServer}>{running ? 'Stop server' : 'Run server'}</Button>
-        </div>
-        <div style={{ marginTop: 8 }}>
-          {['build', 'build:dev', 'dev', 'test', 'watch', 'grunt'].map((name) => (
-            <Button key={name} onClick={() => runScript(name)} style={{ marginRight: 8 }}>npm run {name}</Button>
-          ))}
-        </div>
       </CardBody>
     </Card>
   );
