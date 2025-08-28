@@ -6,12 +6,16 @@
   "main": "src/main.js",
   "scripts": {
     "start": "concurrently -k \"npm:build:watch\" \"electron .\"",
-    "build:watch": "esbuild src/renderer/index.jsx --bundle --outfile=src/renderer/bundle.js --platform=browser --format=iife --jsx=automatic --log-level=info --watch",
-    "build:once": "esbuild src/renderer/index.jsx --bundle --outfile=src/renderer/bundle.js --platform=browser --format=iife --jsx=automatic --log-level=info",
+    "build:watch": "esbuild src/renderer/index.jsx --bundle --outdir=src/renderer --loader:.css=css --platform=browser --format=iife --jsx=automatic --log-level=info --watch",
+    "build:once": "esbuild src/renderer/index.jsx --bundle --outdir=src/renderer --loader:.css=css --platform=browser --format=iife --jsx=automatic --log-level=info",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "@wp-playground/cli": "^2.0.13",
+    "@wordpress/components": "^28.2.0",
+    "@wordpress/icons": "^10.7.0",
+    "@emotion/react": "^11.13.3",
+    "@emotion/styled": "^11.13.0",
     "electron-store": "^10.0.1",
     "extract-zip": "^2.0.1",
     "fs-extra": "^11.2.0",

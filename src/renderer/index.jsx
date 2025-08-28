@@ -1,5 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import {
+  Button,
+  TabPanel,
+  Card,
+  CardBody,
+  Flex,
+  FlexItem
+} from '@wordpress/components';
+import { plus } from '@wordpress/icons';
+import '@wordpress/components/build-style/style.css';
 
 function useSites() {
   const [sites, setSites] = useState([]);
@@ -73,24 +83,34 @@ function SiteRow({ sitePath, onServerLog, onWpLog }) {
   }, [running, sitePath, onServerLog]);
 
   return (
-    <div className="site" style={{ border: '1px solid #ddd', padding: 8, marginBottom: 8, borderRadius: 6 }}>
-      <div className="path" style={{ fontFamily: 'Menlo, monospace', fontSize: 12, color: '#333', wordBreak: 'break-all' }}>{sitePath}</div>
-      <div style={{ marginTop: 6 }}>
-        <button onClick={runInstall}>npm install</button>
-        <button onClick={() => window.api.openDirectory(sitePath)}>open directory</button>
-        <span style={{ marginLeft: 8 }}>
-          {starting ? 'Starting...' : serverUrl ? <a href={serverUrl} onClick={(e) => { e.preventDefault(); window.api.openExternal(serverUrl); }}>{serverUrl}</a> : null}
-        </span>
-      </div>
-      <div style={{ marginTop: 6 }}>
-        <button onClick={toggleServer}>{running ? 'Stop server' : 'Run server'}</button>
-      </div>
-      <div style={{ marginTop: 6 }}>
-        {['build', 'build:dev', 'dev', 'test', 'watch', 'grunt'].map((name) => (
-          <button key={name} onClick={() => runScript(name)} style={{ marginRight: 8 }}>npm run {name}</button>
-        ))}
-      </div>
-    </div>
+    <Card style={{ marginBottom: 12 }}>
+      <CardBody>
+        <div className="path" style={{ fontFamily: 'Menlo, monospace', fontSize: 12, color: '#333', wordBreak: 'break-all' }}>{sitePath}</div>
+        <Flex style={{ marginTop: 8, gap: 8 }}>
+          <FlexItem>
+            <Button variant="secondary" onClick={runInstall}>npm install</Button>
+          </FlexItem>
+          <FlexItem>
+            <Button variant="secondary" onClick={() => window.api.openDirectory(sitePath)}>open directory</Button>
+          </FlexItem>
+          <FlexItem isBlock>
+            <span style={{ marginLeft: 8 }}>
+              {starting ? 'Starting...' : serverUrl ? (
+                <a href={serverUrl} onClick={(e) => { e.preventDefault(); window.api.openExternal(serverUrl); }}>{serverUrl}</a>
+              ) : null}
+            </span>
+          </FlexItem>
+        </Flex>
+        <div style={{ marginTop: 8 }}>
+          <Button variant={running ? 'secondary' : 'primary'} onClick={toggleServer}>{running ? 'Stop server' : 'Run server'}</Button>
+        </div>
+        <div style={{ marginTop: 8 }}>
+          {['build', 'build:dev', 'dev', 'test', 'watch', 'grunt'].map((name) => (
+            <Button key={name} onClick={() => runScript(name)} style={{ marginRight: 8 }}>npm run {name}</Button>
+          ))}
+        </div>
+      </CardBody>
+    </Card>
   );
 }
 
@@ -116,26 +136,52 @@ function App() {
 
   return (
     <div style={{ margin: 16, fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif' }}>
-      <h2>WordPress Core Setup</h2>
-      <div className="row" style={{ marginBottom: 12 }}>
-        <button onClick={chooseAndSetup}>Setup WordPress file structure…</button>
-      </div>
+      <Flex align="center" justify="space-between" style={{ marginBottom: 12 }}>
+        <h2 style={{ margin: 0 }}>WordPress Core Sites</h2>
+        <Button icon={plus} variant="primary" onClick={chooseAndSetup}>Setup another site</Button>
+      </Flex>
 
-      <h3>Sites</h3>
       <div id="sites">
-        {sites.map((s) => (
-          <SiteRow key={s} sitePath={s} onServerLog={appendServerLog} onWpLog={appendWpLog} />
-        ))}
+        {sites.length > 0 ? (
+          sites.map((s) => (
+            <SiteRow key={s} sitePath={s} onServerLog={appendServerLog} onWpLog={appendWpLog} />
+          ))
+        ) : (
+          <Card>
+            <CardBody>
+              <div style={{ marginBottom: 8 }}>No sites yet.</div>
+              <Button icon={plus} variant="primary" onClick={chooseAndSetup}>Setup your first site</Button>
+            </CardBody>
+          </Card>
+        )}
       </div>
 
-      <h3>Npm logs</h3>
-      <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 220, overflow: 'auto' }}>{logs}</div>
-
-      <h3>Server Logs</h3>
-      <div style={{ whiteSpace: 'pre-wrap', background: '#0b1', color: '#001', padding: 12, borderRadius: 6, height: 180, overflow: 'auto' }}>{serverLogs}</div>
-
-      <h3>WordPress Logs (wp-content/debug.log)</h3>
-      <div style={{ whiteSpace: 'pre-wrap', background: '#133', color: '#cde', padding: 12, borderRadius: 6, height: 220, overflow: 'auto' }}>{wpLogs}</div>
+      <div style={{ marginTop: 16 }}>
+        <h3>Logs</h3>
+        <TabPanel
+          className="log-tabs"
+          activeClass="is-active"
+          tabs={[
+            { name: 'npm', title: 'Npm logs' },
+            { name: 'server', title: 'Playground CLI logs' },
+            { name: 'wp', title: 'WordPress logs' },
+          ]}
+        >
+          { (tab) => (
+            <div>
+              {tab.name === 'npm' && (
+                <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 220, overflow: 'auto' }}>{logs}</div>
+              )}
+              {tab.name === 'server' && (
+                <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 220, overflow: 'auto' }}>{serverLogs}</div>
+              )}
+              {tab.name === 'wp' && (
+                <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 220, overflow: 'auto' }}>{wpLogs}</div>
+              )}
+            </div>
+          )}
+        </TabPanel>
+      </div>
     </div>
   );
 }
