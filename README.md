@@ -17,7 +17,9 @@ Getting a Core dev environment running (Node, npm, git, PHP/MySQL or an alternat
 
 ### Screenshots
 
-[Video demo](https://github.com/adamziel/wordpress-contributor-toolkit/raw/refs/heads/trunk/docs/video.mp4)
+#### Video demo
+
+https://github.com/user-attachments/assets/59ef930b-cbe1-4aee-879e-21dcf9999d0c
 
 #### UI
 
