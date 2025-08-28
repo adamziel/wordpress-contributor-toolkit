@@ -8,7 +8,9 @@
     "start": "concurrently -k \"npm:build:watch\" \"electron .\"",
     "build:watch": "esbuild src/renderer/index.jsx --bundle --outdir=src/renderer --loader:.css=css --platform=browser --format=iife --jsx=automatic --log-level=info --watch",
     "build:once": "esbuild src/renderer/index.jsx --bundle --outdir=src/renderer --loader:.css=css --platform=browser --format=iife --jsx=automatic --log-level=info",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "dist:win": "electron-builder --win --publish never",
+    "dist": "electron-builder --publish never"
   },
   "dependencies": {
     "@wp-playground/cli": "^2.0.13",
