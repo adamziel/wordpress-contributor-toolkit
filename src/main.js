@@ -29,6 +29,8 @@ const runningInstalls = {};
 const runningScripts = {};
 /** @type {Record<string, { child: import('child_process').ChildProcess, url?: string }>} */
 const playgroundServers = {};
+/** @type {Record<string, { filePath: string, fileWatcher?: import('fs').FSWatcher, dirWatcher?: import('fs').FSWatcher, lastSize: number }>} */
+const wpDebugWatchers = {};
 
 function createWindow() {
 	const mainWindow = new BrowserWindow({
@@ -230,6 +232,8 @@ ipcMain.handle('playground:start', async (event, sitePath) => {
 	child.on('close', (code) => {
 		delete playgroundServers[sitePath];
 		event.sender.send('playground:stopped', { sitePath, code });
+		// Stop WP debug tail if running
+		stopWpDebugTail(sitePath);
 	});
 
 	return new Promise((resolve) => {
@@ -252,6 +256,81 @@ ipcMain.handle('playground:stop', async (_event, sitePath) => {
 	} catch (e) {
 		return { ok: false, error: String(e) };
 	}
+});
+
+// --- WordPress debug.log tailing ---
+function startWpDebugTail(sitePath, webContents) {
+	const wpContentDir = path.join(sitePath, 'build', 'wp-content');
+	const filePath = path.join(wpContentDir, 'debug.log');
+	if (wpDebugWatchers[sitePath]?.fileWatcher || wpDebugWatchers[sitePath]?.dirWatcher) {
+		return true;
+	}
+	wpDebugWatchers[sitePath] = { filePath, lastSize: 0 };
+	const state = wpDebugWatchers[sitePath];
+
+	function attachFileWatcher() {
+		try {
+			const stat = fs.existsSync(filePath) ? fs.statSync(filePath) : null;
+			if (!stat) return false;
+			// Send initial tail (cap to last 256KB)
+			const maxInitial = 256 * 1024;
+			const start = stat.size > maxInitial ? stat.size - maxInitial : 0;
+			state.lastSize = stat.size;
+			if (stat.size > 0) {
+				const rs = fs.createReadStream(filePath, { start });
+				rs.on('data', (chunk) => {
+					webContents.send('wp:debug-log:data', { sitePath, data: chunk.toString() });
+				});
+			}
+			state.fileWatcher = fs.watch(filePath, (evt) => {
+				if (evt !== 'change') return;
+				try {
+					const s = fs.statSync(filePath);
+					if (s.size > state.lastSize) {
+						const rs2 = fs.createReadStream(filePath, { start: state.lastSize });
+						rs2.on('data', (chunk) => {
+							webContents.send('wp:debug-log:data', { sitePath, data: chunk.toString() });
+						});
+						state.lastSize = s.size;
+					}
+				} catch {}
+			});
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	// Watch directory for creation if the file doesn't exist yet
+	if (!attachFileWatcher()) {
+		try {
+			state.dirWatcher = fs.watch(wpContentDir, () => {
+				if (attachFileWatcher() && state.dirWatcher) {
+					state.dirWatcher.close();
+					state.dirWatcher = undefined;
+				}
+			});
+		} catch {}
+	}
+	return true;
+}
+
+function stopWpDebugTail(sitePath) {
+	const state = wpDebugWatchers[sitePath];
+	if (!state) return;
+	try { state.fileWatcher?.close(); } catch {}
+	try { state.dirWatcher?.close(); } catch {}
+	delete wpDebugWatchers[sitePath];
+}
+
+ipcMain.handle('wp-debug:start', async (event, sitePath) => {
+	startWpDebugTail(sitePath, event.sender);
+	return true;
+});
+
+ipcMain.handle('wp-debug:stop', async (_event, sitePath) => {
+	stopWpDebugTail(sitePath);
+	return true;
 });
 
 function downloadFile(url, dest, onProgress) {

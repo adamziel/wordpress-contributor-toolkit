@@ -40,6 +40,18 @@ contextBridge.exposeInMainWorld('api', {
 ,
 	openExternal: (url) => ipcRenderer.invoke('url:open', url)
 ,
+	startWpDebug: async (sitePath, onData) => {
+		const handler = (_e, payload) => {
+			if (payload.sitePath === sitePath) onData && onData(payload.data);
+		};
+		ipcRenderer.on('wp:debug-log:data', handler);
+		await ipcRenderer.invoke('wp-debug:start', sitePath);
+		return () => ipcRenderer.removeListener('wp:debug-log:data', handler);
+	},
+	stopWpDebug: async (sitePath) => {
+		await ipcRenderer.invoke('wp-debug:stop', sitePath);
+	}
+,
 	startServer: async (sitePath, onLog, onUrl, onStopped) => {
 		const logHandler = (_e, payload) => {
 			if (payload.sitePath === sitePath) onLog && onLog(payload);

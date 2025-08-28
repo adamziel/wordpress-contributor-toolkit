@@ -24501,7 +24501,7 @@
     }, [refresh]);
     return { sites, refresh };
   }
-  function SiteRow({ sitePath, onServerLog }) {
+  function SiteRow({ sitePath, onServerLog, onWpLog }) {
     const [serverUrl, setServerUrl] = (0, import_react.useState)("");
     const [starting, setStarting] = (0, import_react.useState)(false);
     const [running, setRunning] = (0, import_react.useState)(false);
@@ -24541,8 +24541,10 @@ ${name} exited with code ${code}
             setServerUrl("");
           }
         );
+        window.api.startWpDebug(sitePath, (data) => onWpLog(`[${sitePath}] ${data}`));
       } else {
         await window.api.stopServer(sitePath);
+        window.api.stopWpDebug(sitePath);
       }
     }, [running, sitePath, onServerLog]);
     return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "site", style: { border: "1px solid #ddd", padding: 8, marginBottom: 8, borderRadius: 6 }, children: [
@@ -24566,8 +24568,10 @@ ${name} exited with code ${code}
     const { sites, refresh } = useSites();
     const [logs, setLogs] = (0, import_react.useState)("");
     const [serverLogs, setServerLogs] = (0, import_react.useState)("");
+    const [wpLogs, setWpLogs] = (0, import_react.useState)("");
     const appendLog = (0, import_react.useCallback)((s) => setLogs((v) => v + s), []);
     const appendServerLog = (0, import_react.useCallback)((s) => setServerLogs((v) => v + s), []);
+    const appendWpLog = (0, import_react.useCallback)((s) => setWpLogs((v) => v + s), []);
     const chooseAndSetup = (0, import_react.useCallback)(async () => {
       const dir = await window.api.chooseDirectory();
       if (!dir) return;
@@ -24582,11 +24586,13 @@ ${name} exited with code ${code}
       /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "WordPress Core Setup" }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "row", style: { marginBottom: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { onClick: chooseAndSetup, children: "Setup WordPress file structure\u2026" }) }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "Sites" }),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { id: "sites", children: sites.map((s) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SiteRow, { sitePath: s, onServerLog: appendServerLog }, s)) }),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "Logs" }),
+      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { id: "sites", children: sites.map((s) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SiteRow, { sitePath: s, onServerLog: appendServerLog, onWpLog: appendWpLog }, s)) }),
+      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "Npm logs" }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 220, overflow: "auto" }, children: logs }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "Server Logs" }),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { whiteSpace: "pre-wrap", background: "#0b1", color: "#001", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: serverLogs })
+      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { whiteSpace: "pre-wrap", background: "#0b1", color: "#001", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: serverLogs }),
+      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "WordPress Logs (wp-content/debug.log)" }),
+      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { whiteSpace: "pre-wrap", background: "#133", color: "#cde", padding: 12, borderRadius: 6, height: 220, overflow: "auto" }, children: wpLogs })
     ] });
   }
   var root = (0, import_client.createRoot)(document.getElementById("root"));

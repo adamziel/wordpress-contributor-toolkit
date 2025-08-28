@@ -25,7 +25,7 @@ function LogPanel({ title, bg = '#111', color = '#eee' }) {
   );
 }
 
-function SiteRow({ sitePath, onServerLog }) {
+function SiteRow({ sitePath, onServerLog, onWpLog }) {
   const [serverUrl, setServerUrl] = useState('');
   const [starting, setStarting] = useState(false);
   const [running, setRunning] = useState(false);
@@ -64,8 +64,11 @@ function SiteRow({ sitePath, onServerLog }) {
           setServerUrl('');
         }
       );
+      // Start tailing WP debug log
+      window.api.startWpDebug(sitePath, (data) => onWpLog(`[${sitePath}] ${data}`));
     } else {
       await window.api.stopServer(sitePath);
+      window.api.stopWpDebug(sitePath);
     }
   }, [running, sitePath, onServerLog]);
 
@@ -95,8 +98,10 @@ function App() {
   const { sites, refresh } = useSites();
   const [logs, setLogs] = useState('');
   const [serverLogs, setServerLogs] = useState('');
+  const [wpLogs, setWpLogs] = useState('');
   const appendLog = useCallback((s) => setLogs((v) => v + s), []);
   const appendServerLog = useCallback((s) => setServerLogs((v) => v + s), []);
+  const appendWpLog = useCallback((s) => setWpLogs((v) => v + s), []);
 
   const chooseAndSetup = useCallback(async () => {
     const dir = await window.api.chooseDirectory();
@@ -119,15 +124,18 @@ function App() {
       <h3>Sites</h3>
       <div id="sites">
         {sites.map((s) => (
-          <SiteRow key={s} sitePath={s} onServerLog={appendServerLog} />
+          <SiteRow key={s} sitePath={s} onServerLog={appendServerLog} onWpLog={appendWpLog} />
         ))}
       </div>
 
-      <h3>Logs</h3>
+      <h3>Npm logs</h3>
       <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 220, overflow: 'auto' }}>{logs}</div>
 
       <h3>Server Logs</h3>
       <div style={{ whiteSpace: 'pre-wrap', background: '#0b1', color: '#001', padding: 12, borderRadius: 6, height: 180, overflow: 'auto' }}>{serverLogs}</div>
+
+      <h3>WordPress Logs (wp-content/debug.log)</h3>
+      <div style={{ whiteSpace: 'pre-wrap', background: '#133', color: '#cde', padding: 12, borderRadius: 6, height: 220, overflow: 'auto' }}>{wpLogs}</div>
     </div>
   );
 }
