@@ -38,6 +38,8 @@ contextBridge.exposeInMainWorld('api', {
 		ipcRenderer.on('npm:run-script:done', doneHandler);
 	}
 ,
+	openExternal: (url) => ipcRenderer.invoke('url:open', url)
+,
 	startServer: async (sitePath, onLog, onUrl, onStopped) => {
 		const logHandler = (_e, payload) => {
 			if (payload.sitePath === sitePath) onLog && onLog(payload);

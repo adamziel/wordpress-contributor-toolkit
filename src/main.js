@@ -119,6 +119,12 @@ ipcMain.handle('dir:open', async (_e, directoryPath) => {
 	return result === '';
 });
 
+ipcMain.handle('url:open', async (_e, url) => {
+	if (!url) return false;
+	await shell.openExternal(url);
+	return true;
+});
+
 ipcMain.handle('npm:install', async (event, directoryPath) => {
 	if (!directoryPath) throw new Error('directoryPath is required');
 

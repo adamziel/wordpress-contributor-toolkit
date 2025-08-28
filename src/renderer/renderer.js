@@ -63,35 +63,51 @@ async function refreshSites() {
 			await window.api.openDirectory(sitePath);
 		});
 
-		// Add server controls per site
+		// Server toggle per site
 		const serverControls = document.createElement('div');
 		serverControls.style.marginTop = '6px';
-		const runBtn = document.createElement('button');
-		runBtn.textContent = 'Run server';
-		const stopBtn = document.createElement('button');
-		stopBtn.textContent = 'Stop server';
+		const toggleBtn = document.createElement('button');
+		toggleBtn.textContent = 'Run server';
 		const serverUrlSpan = div.querySelector('.serverUrl');
-		serverControls.appendChild(runBtn);
-		serverControls.appendChild(stopBtn);
+		serverControls.appendChild(toggleBtn);
 		div.appendChild(serverControls);
 
-		runBtn.addEventListener('click', async () => {
-			serverUrlSpan.textContent = 'Starting...';
-			await window.api.startServer(sitePath, (payload) => {
-				appendServerLog(payload.sitePath, payload.data, payload.type);
-			}, (url) => {
-				serverUrlSpan.innerHTML = '';
-				const a = document.createElement('a');
-				a.href = url;
-				a.textContent = url + 'wordpress';
-				a.target = '_blank';
-				serverUrlSpan.appendChild(a);
-			}, () => {
-				serverUrlSpan.textContent = 'Stopped';
-			});
-		});
-		stopBtn.addEventListener('click', async () => {
-			await window.api.stopServer(sitePath);
+		let running = false;
+		toggleBtn.addEventListener('click', async () => {
+			if (!running) {
+				toggleBtn.disabled = true;
+				serverUrlSpan.textContent = 'Starting...';
+				await window.api.startServer(
+					sitePath,
+					(payload) => {
+						appendServerLog(payload.sitePath, payload.data, payload.type);
+					},
+					(url) => {
+						// Update UI and open externally (no '/wordpress' suffix)
+						serverUrlSpan.innerHTML = '';
+						const displayUrl = url.replace(/\/$/, '/');
+						const a = document.createElement('a');
+						a.href = displayUrl;
+						a.textContent = displayUrl;
+						a.addEventListener('click', (e) => {
+							e.preventDefault();
+							window.api.openExternal(displayUrl);
+						});
+						serverUrlSpan.appendChild(a);
+						window.api.openExternal(displayUrl);
+						running = true;
+						toggleBtn.textContent = 'Stop server';
+						toggleBtn.disabled = false;
+					},
+					() => {
+						running = false;
+						serverUrlSpan.textContent = 'Stopped';
+						toggleBtn.textContent = 'Run server';
+					}
+				);
+			} else {
+				await window.api.stopServer(sitePath);
+			}
 		});
 
 		// Add npm script buttons row
