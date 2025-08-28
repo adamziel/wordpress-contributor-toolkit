@@ -37,7 +37,10 @@ contextBridge.exposeInMainWorld('api', {
 		};
 		ipcRenderer.on('npm:run-script:log', logHandler);
 		ipcRenderer.on('npm:run-script:done', doneHandler);
+		return { runId };
 	}
+,
+	npmKill: (params) => ipcRenderer.invoke('npm:kill', params)
 ,
 	openExternal: (url) => ipcRenderer.invoke('url:open', url)
 ,

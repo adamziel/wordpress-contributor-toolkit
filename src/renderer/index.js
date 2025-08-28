@@ -46571,19 +46571,27 @@ If there's a particular need for this, please submit a feature request at https:
     }, [refresh]);
     return { sites, siteMeta, refresh, setSiteMeta, setSites };
   }
-  function SiteRow({ sitePath, initialized, createdAt, onInitialized, onServerLog, onWpLog, onForget, onDelete }) {
+  function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, onDelete }) {
     const [serverUrl, setServerUrl] = (0, import_react66.useState)("");
     const [starting, setStarting] = (0, import_react66.useState)(false);
     const [running, setRunning] = (0, import_react66.useState)(false);
     const [installing, setInstalling] = (0, import_react66.useState)(false);
+    const [selectedTab, setSelectedTab] = (0, import_react66.useState)("npm");
+    const [npmLogs, setNpmLogs] = (0, import_react66.useState)("");
+    const [serverLogs, setServerLogs] = (0, import_react66.useState)("");
+    const [wpLogs, setWpLogs] = (0, import_react66.useState)("");
     const siteName = sitePath.split("/").pop();
     const createdLabel = createdAt ? new Date(createdAt).toLocaleString() : "";
+    const appendNpm = (0, import_react66.useCallback)((s) => setNpmLogs((v) => v + s), []);
+    const appendServer = (0, import_react66.useCallback)((s) => setServerLogs((v) => v + s), []);
+    const appendWp = (0, import_react66.useCallback)((s) => setWpLogs((v) => v + s), []);
     const runInstall = (0, import_react66.useCallback)(() => {
       setInstalling(true);
+      setSelectedTab("npm");
       window.api.runNpmInstall(sitePath, ({ type, data }) => {
-        onServerLog(`[install ${type}] ${data}`);
+        appendNpm(data);
       }, async ({ code }) => {
-        onServerLog(`
+        appendNpm(`
 install exited with code ${code}
 `);
         setInstalling(false);
@@ -46592,22 +46600,26 @@ install exited with code ${code}
           onInitialized(sitePath);
         }
       });
-    }, [sitePath, onServerLog, onInitialized]);
+    }, [sitePath, appendNpm, onInitialized]);
     const runScript = (0, import_react66.useCallback)((name) => {
+      setSelectedTab("npm");
       window.api.runNpmScript(sitePath, name, [], ({ type, data }) => {
-        onServerLog(`[${name} ${type}] ${data}`);
+        appendNpm(data);
       }, ({ code }) => {
-        onServerLog(`
+        appendNpm(`
 ${name} exited with code ${code}
 `);
       });
-    }, [sitePath, onServerLog]);
+    }, [sitePath, appendNpm]);
+    const killCurrent = (0, import_react66.useCallback)(async () => {
+      await window.api.npmKill({ directoryPath: sitePath });
+    }, [sitePath]);
     const toggleServer = (0, import_react66.useCallback)(async () => {
       if (!running) {
         setStarting(true);
         await window.api.startServer(
           sitePath,
-          (payload) => onServerLog(`[${payload.sitePath} ${payload.type}] ${payload.data}`),
+          (payload) => appendServer(payload.data),
           (url) => {
             const displayUrl = url.replace(/\/$/, "/");
             setServerUrl(displayUrl);
@@ -46620,17 +46632,19 @@ ${name} exited with code ${code}
             setServerUrl("");
           }
         );
-        window.api.startWpDebug(sitePath, (data) => onWpLog(`[${sitePath}] ${data}`));
+        window.api.startWpDebug(sitePath, (data) => appendWp(data));
       } else {
         await window.api.stopServer(sitePath);
         window.api.stopWpDebug(sitePath);
+        await window.api.npmKill({ directoryPath: sitePath });
       }
-    }, [running, sitePath, onServerLog, onWpLog]);
+    }, [running, sitePath, appendServer, appendWp]);
     const toggleDevServer = async () => {
       if (!running) {
-        runScript("watch");
+        runScript("dev");
+        setSelectedTab("server");
       }
-      toggleServer();
+      await toggleServer();
     };
     const confirmAnd = async (message, action) => {
       if (window.confirm(message)) {
@@ -46667,6 +46681,13 @@ ${name} exited with code ${code}
         !initialized ? /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { isBusy: installing, variant: "primary", onClick: runInstall, children: "Install dependencies" }) }) : null,
         /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { variant: "secondary", onClick: () => window.api.openDirectory(sitePath), children: "Open directory" }) }),
         initialized ? /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(import_jsx_runtime51.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default4, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { isBusy: starting, variant: running ? "secondary" : "primary", onClick: toggleDevServer, children: running ? "Stop dev server" : "Start dev server" }),
+            /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("span", { style: { marginLeft: 8 }, children: starting ? "Starting..." : serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("a", { href: serverUrl, onClick: (e) => {
+              e.preventDefault();
+              window.api.openExternal(serverUrl);
+            }, children: serverUrl }) : null })
+          ] }),
           /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
             dropdown_menu_default,
             {
@@ -46674,6 +46695,7 @@ ${name} exited with code ${code}
               label: "Run command",
               text: "Run command",
               controls: [
+                { title: "Kill running command", onClick: killCurrent },
                 { title: "npm run build", onClick: () => runScript("build") },
                 { title: "npm run build:dev", onClick: () => runScript("build:dev") },
                 { title: "npm run dev", onClick: () => runScript("dev") },
@@ -46682,30 +46704,35 @@ ${name} exited with code ${code}
                 { title: "npm run grunt", onClick: () => runScript("grunt") }
               ]
             }
-          ) }),
-          /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default4, { isBlock: true, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { variant: running ? "secondary" : "primary", onClick: toggleDevServer, children: running ? "Stop dev server" : "Start dev server" }),
-            /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("span", { style: { marginLeft: 8 }, children: starting ? "Starting..." : serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("a", { href: serverUrl, onClick: (e) => {
-              e.preventDefault();
-              window.api.openExternal(serverUrl);
-            }, children: serverUrl }) : null })
-          ] })
+          ) })
         ] }) : null
-      ] })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { marginTop: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
+        tab_panel_default,
+        {
+          className: "log-tabs",
+          activeClass: "is-active",
+          onSelect: (name) => setSelectedTab(name),
+          tabs: [
+            { name: "npm", title: "Npm logs" },
+            { name: "server", title: "Server logs" },
+            { name: "wp", title: "WordPress logs" }
+          ],
+          children: (tab) => /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { children: [
+            tab.name === "npm" && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: npmLogs }) }),
+            tab.name === "server" && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: serverLogs }),
+            tab.name === "wp" && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: wpLogs })
+          ] })
+        }
+      ) })
     ] }) });
   }
   function App() {
     const { sites, siteMeta, refresh, setSiteMeta, setSites } = useSites();
-    const [logs, setLogs] = (0, import_react66.useState)("");
-    const [serverLogs, setServerLogs] = (0, import_react66.useState)("");
-    const [wpLogs, setWpLogs] = (0, import_react66.useState)("");
     const [downloading, setDownloading] = (0, import_react66.useState)(false);
     const [downloadPct, setDownloadPct] = (0, import_react66.useState)(0);
     const [downloadPhase, setDownloadPhase] = (0, import_react66.useState)("");
     const [pendingSite, setPendingSite] = (0, import_react66.useState)(null);
-    const appendLog = (0, import_react66.useCallback)((s) => setLogs((v) => v + s), []);
-    const appendServerLog = (0, import_react66.useCallback)((s) => setServerLogs((v) => v + s), []);
-    const appendWpLog = (0, import_react66.useCallback)((s) => setWpLogs((v) => v + s), []);
     (0, import_react66.useEffect)(() => {
       const progressHandler = (_e, p) => {
         if (!p || typeof p.percent !== "number") return;
@@ -46740,14 +46767,14 @@ ${name} exited with code ${code}
         setDownloading(true);
         setDownloadPct(0);
         setPendingSite({ targetDir: dir });
-        const sitePath = await window.api.setupWordPress(dir);
+        await window.api.setupWordPress(dir);
         await refresh();
       } catch (e) {
         setDownloading(false);
         setPendingSite(null);
-        appendLog(String(e));
+        alert(String(e));
       }
-    }, [refresh, appendLog]);
+    }, [refresh]);
     const onInitialized = (0, import_react66.useCallback)((sitePath) => {
       setSiteMeta((m) => ({ ...m || {}, [sitePath]: { ...m?.[sitePath] || {}, initialized: true } }));
     }, [setSiteMeta]);
@@ -46777,8 +46804,6 @@ ${name} exited with code ${code}
             initialized: Boolean(siteMeta?.[s]?.initialized),
             createdAt: siteMeta?.[s]?.createdAt,
             onInitialized,
-            onServerLog: appendServerLog,
-            onWpLog: appendWpLog,
             onForget,
             onDelete
           },
@@ -46787,26 +46812,6 @@ ${name} exited with code ${code}
           /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { marginBottom: 8 }, children: "No sites yet." }),
           /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { icon: plus_default, variant: "primary", onClick: chooseAndSetup, children: "Setup your first site" })
         ] }) })
-      ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { style: { marginTop: 16 }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("h3", { children: "Logs" }),
-        /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
-          tab_panel_default,
-          {
-            className: "log-tabs",
-            activeClass: "is-active",
-            tabs: [
-              { name: "npm", title: "Npm logs" },
-              { name: "server", title: "Playground CLI logs" },
-              { name: "wp", title: "WordPress logs" }
-            ],
-            children: (tab) => /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { children: [
-              tab.name === "npm" && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 220, overflow: "auto" }, children: logs }),
-              tab.name === "server" && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 220, overflow: "auto" }, children: serverLogs }),
-              tab.name === "wp" && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 220, overflow: "auto" }, children: wpLogs })
-            ] })
-          }
-        )
       ] })
     ] });
   }

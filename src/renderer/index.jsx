@@ -24,57 +24,57 @@ function useSites() {
   return { sites, siteMeta, refresh, setSiteMeta, setSites };
 }
 
-function LogPanel({ title, bg = '#111', color = '#eee' }) {
-  const [lines, setLines] = useState([]);
-  const ref = useRef(null);
-  useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; });
-  return (
-    <>
-      <h3>{title}</h3>
-      <div ref={ref} style={{ whiteSpace: 'pre-wrap', background: bg, color, padding: 12, borderRadius: 6, height: 220, overflow: 'auto' }}>
-        {lines.join('')}
-      </div>
-    </>
-  );
-}
-
-function SiteRow({ sitePath, initialized, createdAt, onInitialized, onServerLog, onWpLog, onForget, onDelete }) {
+function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, onDelete }) {
   const [serverUrl, setServerUrl] = useState('');
   const [starting, setStarting] = useState(false);
   const [running, setRunning] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [selectedTab, setSelectedTab] = useState('npm');
+  const [npmLogs, setNpmLogs] = useState('');
+  const [serverLogs, setServerLogs] = useState('');
+  const [wpLogs, setWpLogs] = useState('');
 
   const siteName = sitePath.split('/').pop();
   const createdLabel = createdAt ? new Date(createdAt).toLocaleString() : '';
 
+  const appendNpm = useCallback((s) => setNpmLogs((v) => v + s), []);
+  const appendServer = useCallback((s) => setServerLogs((v) => v + s), []);
+  const appendWp = useCallback((s) => setWpLogs((v) => v + s), []);
+
   const runInstall = useCallback(() => {
     setInstalling(true);
+    setSelectedTab('npm');
     window.api.runNpmInstall(sitePath, ({ type, data }) => {
-      onServerLog(`[install ${type}] ${data}`);
+      appendNpm(data);
     }, async ({ code }) => {
-      onServerLog(`\ninstall exited with code ${code}\n`);
+      appendNpm(`\ninstall exited with code ${code}\n`);
       setInstalling(false);
       if (code === 0) {
         await window.api.markSiteInitialized(sitePath);
         onInitialized(sitePath);
       }
     });
-  }, [sitePath, onServerLog, onInitialized]);
+  }, [sitePath, appendNpm, onInitialized]);
 
   const runScript = useCallback((name) => {
+    setSelectedTab('npm');
     window.api.runNpmScript(sitePath, name, [], ({ type, data }) => {
-      onServerLog(`[${name} ${type}] ${data}`);
+      appendNpm(data);
     }, ({ code }) => {
-      onServerLog(`\n${name} exited with code ${code}\n`);
+      appendNpm(`\n${name} exited with code ${code}\n`);
     });
-  }, [sitePath, onServerLog]);
+  }, [sitePath, appendNpm]);
+
+  const killCurrent = useCallback(async () => {
+    await window.api.npmKill({ directoryPath: sitePath });
+  }, [sitePath]);
 
   const toggleServer = useCallback(async () => {
     if (!running) {
       setStarting(true);
       await window.api.startServer(
         sitePath,
-        (payload) => onServerLog(`[${payload.sitePath} ${payload.type}] ${payload.data}`),
+        (payload) => appendServer(payload.data),
         (url) => {
           const displayUrl = url.replace(/\/$/, '/');
           setServerUrl(displayUrl);
@@ -87,18 +87,20 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onServerLog,
           setServerUrl('');
         }
       );
-      window.api.startWpDebug(sitePath, (data) => onWpLog(`[${sitePath}] ${data}`));
+      window.api.startWpDebug(sitePath, (data) => appendWp(data));
     } else {
       await window.api.stopServer(sitePath);
       window.api.stopWpDebug(sitePath);
+      await window.api.npmKill({ directoryPath: sitePath });
     }
-  }, [running, sitePath, onServerLog, onWpLog]);
+  }, [running, sitePath, appendServer, appendWp]);
 
   const toggleDevServer = async () => {
     if (!running) {
-      runScript('watch');
+      runScript('dev');
+      setSelectedTab('server');
     }
-    toggleServer();
+    await toggleServer();
   }
 
   const confirmAnd = async (message, action) => {
@@ -142,11 +144,20 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onServerLog,
           {initialized ? (
             <>
               <FlexItem>
+                <Button isBusy={starting} variant={running ? 'secondary' : 'primary'} onClick={toggleDevServer}>{running ? 'Stop dev server' : 'Start dev server'}</Button>
+                <span style={{ marginLeft: 8 }}>
+                  {starting ? 'Starting...' : serverUrl ? (
+                    <a href={serverUrl} onClick={(e) => { e.preventDefault(); window.api.openExternal(serverUrl); }}>{serverUrl}</a>
+                  ) : null}
+                </span>
+              </FlexItem>
+              <FlexItem>
                 <DropdownMenu
                   icon={chevronDown}
                   label="Run command"
                   text="Run command"
                   controls={[
+                    { title: 'Kill running command', onClick: killCurrent },
                     { title: 'npm run build', onClick: () => runScript('build') },
                     { title: 'npm run build:dev', onClick: () => runScript('build:dev') },
                     { title: 'npm run dev', onClick: () => runScript('dev') },
@@ -156,17 +167,38 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onServerLog,
                   ]}
                 />
               </FlexItem>
-              <FlexItem isBlock>
-                <Button variant={running ? 'secondary' : 'primary'} onClick={toggleDevServer}>{running ? 'Stop dev server' : 'Start dev server'}</Button>
-                <span style={{ marginLeft: 8 }}>
-                  {starting ? 'Starting...' : serverUrl ? (
-                    <a href={serverUrl} onClick={(e) => { e.preventDefault(); window.api.openExternal(serverUrl); }}>{serverUrl}</a>
-                  ) : null}
-                </span>
-              </FlexItem>
             </>
           ) : null}
         </Flex>
+
+        <div style={{ marginTop: 12 }}>
+          <TabPanel
+            className="log-tabs"
+            activeClass="is-active"
+            onSelect={(name) => setSelectedTab(name)}
+            tabs={[
+              { name: 'npm', title: 'Npm logs' },
+              { name: 'server', title: 'Server logs' },
+              { name: 'wp', title: 'WordPress logs' },
+            ]}
+          >
+            {(tab) => (
+              <div>
+                {tab.name === 'npm' && (
+                  <div>
+                    <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 180, overflow: 'auto' }}>{npmLogs}</div>
+                  </div>
+                )}
+                {tab.name === 'server' && (
+                  <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 180, overflow: 'auto' }}>{serverLogs}</div>
+                )}
+                {tab.name === 'wp' && (
+                  <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 180, overflow: 'auto' }}>{wpLogs}</div>
+                )}
+              </div>
+            )}
+          </TabPanel>
+        </div>
       </CardBody>
     </Card>
   );
@@ -174,16 +206,10 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onServerLog,
 
 function App() {
   const { sites, siteMeta, refresh, setSiteMeta, setSites } = useSites();
-  const [logs, setLogs] = useState('');
-  const [serverLogs, setServerLogs] = useState('');
-  const [wpLogs, setWpLogs] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [downloadPct, setDownloadPct] = useState(0);
   const [downloadPhase, setDownloadPhase] = useState('');
-  const [pendingSite, setPendingSite] = useState(null); // { targetDir, sitePath? }
-  const appendLog = useCallback((s) => setLogs((v) => v + s), []);
-  const appendServerLog = useCallback((s) => setServerLogs((v) => v + s), []);
-  const appendWpLog = useCallback((s) => setWpLogs((v) => v + s), []);
+  const [pendingSite, setPendingSite] = useState(null);
 
   useEffect(() => {
     const progressHandler = (_e, p) => {
@@ -220,14 +246,14 @@ function App() {
       setDownloading(true);
       setDownloadPct(0);
       setPendingSite({ targetDir: dir });
-      const sitePath = await window.api.setupWordPress(dir);
+      await window.api.setupWordPress(dir);
       await refresh();
     } catch (e) {
       setDownloading(false);
       setPendingSite(null);
-      appendLog(String(e));
+      alert(String(e));
     }
-  }, [refresh, appendLog]);
+  }, [refresh]);
 
   const onInitialized = useCallback((sitePath) => {
     setSiteMeta((m) => ({ ...(m || {}), [sitePath]: { ...(m?.[sitePath] || {}), initialized: true } }));
@@ -273,8 +299,6 @@ function App() {
               initialized={Boolean(siteMeta?.[s]?.initialized)}
               createdAt={siteMeta?.[s]?.createdAt}
               onInitialized={onInitialized}
-              onServerLog={appendServerLog}
-              onWpLog={appendWpLog}
               onForget={onForget}
               onDelete={onDelete}
             />
@@ -287,33 +311,6 @@ function App() {
             </CardBody>
           </Card>
         )}
-      </div>
-
-      <div style={{ marginTop: 16 }}>
-        <h3>Logs</h3>
-        <TabPanel
-          className="log-tabs"
-          activeClass="is-active"
-          tabs={[
-            { name: 'npm', title: 'Npm logs' },
-            { name: 'server', title: 'Playground CLI logs' },
-            { name: 'wp', title: 'WordPress logs' },
-          ]}
-        >
-          { (tab) => (
-            <div>
-              {tab.name === 'npm' && (
-                <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 220, overflow: 'auto' }}>{logs}</div>
-              )}
-              {tab.name === 'server' && (
-                <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 220, overflow: 'auto' }}>{serverLogs}</div>
-              )}
-              {tab.name === 'wp' && (
-                <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 220, overflow: 'auto' }}>{wpLogs}</div>
-              )}
-            </div>
-          )}
-        </TabPanel>
       </div>
     </div>
   );

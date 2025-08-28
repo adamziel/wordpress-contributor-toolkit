@@ -27,6 +27,8 @@ async function getStore() {
 const runningInstalls = {};
 /** @type {Record<string, import('child_process').ChildProcess>} */
 const runningScripts = {};
+/** @type {Record<string, string>} */
+const runIdByDirectory = {};
 /** @type {Record<string, { child: import('child_process').ChildProcess, url?: string }>} */
 const playgroundServers = {};
 /** @type {Record<string, { filePath: string, fileWatcher?: import('fs').FSWatcher, dirWatcher?: import('fs').FSWatcher, lastSize: number }>} */
@@ -215,6 +217,7 @@ ipcMain.handle('npm:run-script', async (event, directoryPath, scriptName, script
 	});
 
 	runningScripts[runId] = child;
+	runIdByDirectory[directoryPath] = runId;
 
 	child.stdout.on('data', (data) => {
 		event.sender.send('npm:run-script:log', { runId, type: 'stdout', data: data.toString() });
@@ -225,9 +228,30 @@ ipcMain.handle('npm:run-script', async (event, directoryPath, scriptName, script
 	child.on('close', (code) => {
 		event.sender.send('npm:run-script:done', { runId, code });
 		delete runningScripts[runId];
+		if (runIdByDirectory[directoryPath] === runId) {
+			delete runIdByDirectory[directoryPath];
+		}
 	});
 
 	return { runId };
+});
+
+ipcMain.handle('npm:kill', async (_event, { runId, directoryPath }) => {
+	let child;
+	if (runId && runningScripts[runId]) {
+		child = runningScripts[runId];
+	} else if (directoryPath && runIdByDirectory[directoryPath]) {
+		const id = runIdByDirectory[directoryPath];
+		child = runningScripts[id];
+	}
+	if (!child) return { ok: false, error: 'No running script' };
+	try {
+		child.kill('SIGTERM');
+		setTimeout(() => child.kill('SIGKILL'), 3000);
+		return { ok: true };
+	} catch (e) {
+		return { ok: false, error: String(e) };
+	}
 });
 
 ipcMain.handle('playground:start', async (event, sitePath) => {
