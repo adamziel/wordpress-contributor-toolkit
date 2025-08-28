@@ -34,6 +34,27 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
   const [serverLogs, setServerLogs] = useState('');
   const [wpLogs, setWpLogs] = useState('');
 
+  // Sticky auto-scroll management with a single state for the active tab
+  const npmRef = useRef(null);
+  const serverRef = useRef(null);
+  const wpRef = useRef(null);
+  const [stick, setStick] = useState(true);
+  const threshold = 8; // px from bottom
+
+  // Scroll-to-bottom when sticky for the active tab
+  useEffect(() => {
+    const ref = selectedTab === 'npm' ? npmRef : selectedTab === 'server' ? serverRef : wpRef;
+    if (stick && ref.current) ref.current.scrollTop = ref.current.scrollHeight;
+  }, [npmLogs, serverLogs, wpLogs, selectedTab, stick]);
+
+  // Handlers only disable sticky when user scrolls up in the active tab; re-enable at bottom
+  const makeOnScroll = (tabName) => (e) => {
+    const el = e.currentTarget;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
+    if (atBottom) setStick(true);
+    else if (selectedTab === tabName && stick) setStick(false);
+  };
+
   const siteName = sitePath.split('/').pop();
   const createdLabel = createdAt ? new Date(createdAt).toLocaleString() : '';
 
@@ -44,6 +65,7 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
   const runInstall = useCallback(() => {
     setInstalling(true);
     setSelectedTab('npm');
+    setStick(true);
     window.api.runNpmInstall(sitePath, ({ type, data }) => {
       appendNpm(data);
     }, async ({ code }) => {
@@ -58,6 +80,7 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
 
   const runScript = useCallback((name) => {
     setSelectedTab('npm');
+    setStick(true);
     window.api.runNpmScript(sitePath, name, [], ({ type, data }) => {
       appendNpm(data);
     }, ({ code }) => {
@@ -72,6 +95,8 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
   const toggleServer = useCallback(async () => {
     if (!running) {
       setStarting(true);
+      setSelectedTab('server');
+      setStick(true);
       await window.api.startServer(
         sitePath,
         (payload) => appendServer(payload.data),
@@ -98,7 +123,6 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
   const toggleDevServer = async () => {
     if (!running) {
       runScript('dev');
-      setSelectedTab('server');
     }
     await toggleServer();
   }
@@ -144,28 +168,28 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
           {initialized ? (
             <>
               <FlexItem>
-                <Button isBusy={starting} variant={running ? 'secondary' : 'primary'} onClick={toggleDevServer}>{running ? 'Stop dev server' : 'Start dev server'}</Button>
-                <span style={{ marginLeft: 8 }}>
-                  {starting ? 'Starting...' : serverUrl ? (
-                    <a href={serverUrl} onClick={(e) => { e.preventDefault(); window.api.openExternal(serverUrl); }}>{serverUrl}</a>
-                  ) : null}
-                </span>
-              </FlexItem>
-              <FlexItem>
                 <DropdownMenu
                   icon={chevronDown}
                   label="Run command"
                   text="Run command"
                   controls={[
-                    { title: 'Kill running command', onClick: killCurrent },
                     { title: 'npm run build', onClick: () => runScript('build') },
                     { title: 'npm run build:dev', onClick: () => runScript('build:dev') },
                     { title: 'npm run dev', onClick: () => runScript('dev') },
                     { title: 'npm run test', onClick: () => runScript('test') },
                     { title: 'npm run watch', onClick: () => runScript('watch') },
                     { title: 'npm run grunt', onClick: () => runScript('grunt') },
+                    { title: 'Kill running command', onClick: killCurrent },
                   ]}
                 />
+              </FlexItem>
+              <FlexItem>
+                <Button isBusy={starting} variant={running ? 'secondary' : 'primary'} onClick={toggleDevServer}>{running ? 'Stop dev server' : 'Start dev server'}</Button>
+                <span style={{ marginLeft: 8 }}>
+                  {starting ? 'Starting...' : serverUrl ? (
+                    <a href={serverUrl} onClick={(e) => { e.preventDefault(); window.api.openExternal(serverUrl); }}>{serverUrl}</a>
+                  ) : null}
+                </span>
               </FlexItem>
             </>
           ) : null}
@@ -175,7 +199,10 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
           <TabPanel
             className="log-tabs"
             activeClass="is-active"
-            onSelect={(name) => setSelectedTab(name)}
+            onSelect={(name) => {
+              setSelectedTab(name);
+              setStick(true); // reset stickiness on tab switch
+            }}
             tabs={[
               { name: 'npm', title: 'Npm logs' },
               { name: 'server', title: 'Server logs' },
@@ -185,15 +212,13 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
             {(tab) => (
               <div>
                 {tab.name === 'npm' && (
-                  <div>
-                    <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 180, overflow: 'auto' }}>{npmLogs}</div>
-                  </div>
+                  <div ref={npmRef} onScroll={makeOnScroll('npm')} style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 180, overflow: 'auto' }}>{npmLogs}</div>
                 )}
                 {tab.name === 'server' && (
-                  <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 180, overflow: 'auto' }}>{serverLogs}</div>
+                  <div ref={serverRef} onScroll={makeOnScroll('server')} style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 180, overflow: 'auto' }}>{serverLogs}</div>
                 )}
                 {tab.name === 'wp' && (
-                  <div style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 180, overflow: 'auto' }}>{wpLogs}</div>
+                  <div ref={wpRef} onScroll={makeOnScroll('wp')} style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#eee', padding: 12, borderRadius: 6, height: 180, overflow: 'auto' }}>{wpLogs}</div>
                 )}
               </div>
             )}

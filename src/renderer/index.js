@@ -46580,6 +46580,21 @@ If there's a particular need for this, please submit a feature request at https:
     const [npmLogs, setNpmLogs] = (0, import_react66.useState)("");
     const [serverLogs, setServerLogs] = (0, import_react66.useState)("");
     const [wpLogs, setWpLogs] = (0, import_react66.useState)("");
+    const npmRef = (0, import_react66.useRef)(null);
+    const serverRef = (0, import_react66.useRef)(null);
+    const wpRef = (0, import_react66.useRef)(null);
+    const [stick, setStick] = (0, import_react66.useState)(true);
+    const threshold = 8;
+    (0, import_react66.useEffect)(() => {
+      const ref = selectedTab === "npm" ? npmRef : selectedTab === "server" ? serverRef : wpRef;
+      if (stick && ref.current) ref.current.scrollTop = ref.current.scrollHeight;
+    }, [npmLogs, serverLogs, wpLogs, selectedTab, stick]);
+    const makeOnScroll = (tabName) => (e) => {
+      const el = e.currentTarget;
+      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
+      if (atBottom) setStick(true);
+      else if (selectedTab === tabName && stick) setStick(false);
+    };
     const siteName = sitePath.split("/").pop();
     const createdLabel = createdAt ? new Date(createdAt).toLocaleString() : "";
     const appendNpm = (0, import_react66.useCallback)((s) => setNpmLogs((v) => v + s), []);
@@ -46588,6 +46603,7 @@ If there's a particular need for this, please submit a feature request at https:
     const runInstall = (0, import_react66.useCallback)(() => {
       setInstalling(true);
       setSelectedTab("npm");
+      setStick(true);
       window.api.runNpmInstall(sitePath, ({ type, data }) => {
         appendNpm(data);
       }, async ({ code }) => {
@@ -46603,6 +46619,7 @@ install exited with code ${code}
     }, [sitePath, appendNpm, onInitialized]);
     const runScript = (0, import_react66.useCallback)((name) => {
       setSelectedTab("npm");
+      setStick(true);
       window.api.runNpmScript(sitePath, name, [], ({ type, data }) => {
         appendNpm(data);
       }, ({ code }) => {
@@ -46617,6 +46634,8 @@ ${name} exited with code ${code}
     const toggleServer = (0, import_react66.useCallback)(async () => {
       if (!running) {
         setStarting(true);
+        setSelectedTab("server");
+        setStick(true);
         await window.api.startServer(
           sitePath,
           (payload) => appendServer(payload.data),
@@ -46642,7 +46661,6 @@ ${name} exited with code ${code}
     const toggleDevServer = async () => {
       if (!running) {
         runScript("dev");
-        setSelectedTab("server");
       }
       await toggleServer();
     };
@@ -46681,13 +46699,6 @@ ${name} exited with code ${code}
         !initialized ? /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { isBusy: installing, variant: "primary", onClick: runInstall, children: "Install dependencies" }) }) : null,
         /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { variant: "secondary", onClick: () => window.api.openDirectory(sitePath), children: "Open directory" }) }),
         initialized ? /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(import_jsx_runtime51.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default4, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { isBusy: starting, variant: running ? "secondary" : "primary", onClick: toggleDevServer, children: running ? "Stop dev server" : "Start dev server" }),
-            /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("span", { style: { marginLeft: 8 }, children: starting ? "Starting..." : serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("a", { href: serverUrl, onClick: (e) => {
-              e.preventDefault();
-              window.api.openExternal(serverUrl);
-            }, children: serverUrl }) : null })
-          ] }),
           /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
             dropdown_menu_default,
             {
@@ -46695,16 +46706,23 @@ ${name} exited with code ${code}
               label: "Run command",
               text: "Run command",
               controls: [
-                { title: "Kill running command", onClick: killCurrent },
                 { title: "npm run build", onClick: () => runScript("build") },
                 { title: "npm run build:dev", onClick: () => runScript("build:dev") },
                 { title: "npm run dev", onClick: () => runScript("dev") },
                 { title: "npm run test", onClick: () => runScript("test") },
                 { title: "npm run watch", onClick: () => runScript("watch") },
-                { title: "npm run grunt", onClick: () => runScript("grunt") }
+                { title: "npm run grunt", onClick: () => runScript("grunt") },
+                { title: "Kill running command", onClick: killCurrent }
               ]
             }
-          ) })
+          ) }),
+          /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default4, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { isBusy: starting, variant: running ? "secondary" : "primary", onClick: toggleDevServer, children: running ? "Stop dev server" : "Start dev server" }),
+            /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("span", { style: { marginLeft: 8 }, children: starting ? "Starting..." : serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("a", { href: serverUrl, onClick: (e) => {
+              e.preventDefault();
+              window.api.openExternal(serverUrl);
+            }, children: serverUrl }) : null })
+          ] })
         ] }) : null
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { marginTop: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
@@ -46712,16 +46730,19 @@ ${name} exited with code ${code}
         {
           className: "log-tabs",
           activeClass: "is-active",
-          onSelect: (name) => setSelectedTab(name),
+          onSelect: (name) => {
+            setSelectedTab(name);
+            setStick(true);
+          },
           tabs: [
             { name: "npm", title: "Npm logs" },
             { name: "server", title: "Server logs" },
             { name: "wp", title: "WordPress logs" }
           ],
           children: (tab) => /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { children: [
-            tab.name === "npm" && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: npmLogs }) }),
-            tab.name === "server" && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: serverLogs }),
-            tab.name === "wp" && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: wpLogs })
+            tab.name === "npm" && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { ref: npmRef, onScroll: makeOnScroll("npm"), style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: npmLogs }),
+            tab.name === "server" && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { ref: serverRef, onScroll: makeOnScroll("server"), style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: serverLogs }),
+            tab.name === "wp" && /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { ref: wpRef, onScroll: makeOnScroll("wp"), style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: wpLogs })
           ] })
         }
       ) })
