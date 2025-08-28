@@ -47177,7 +47177,7 @@ If there's a particular need for this, please submit a feature request at https:
 install exited with code ${code}
 `);
         setInstalling(false);
-        if (code === 0) {
+        if (1) {
           await window.api.markSiteInitialized(sitePath);
           onInitialized(sitePath);
         }
@@ -47260,7 +47260,7 @@ ${name} exited with code ${code}
       /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(component_default3, { style: { marginTop: 8, gap: 8, justifyContent: "flex-start" }, children: [
         !initialized ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { isBusy: installing, variant: "primary", onClick: runInstall, children: "Install dependencies" }) }) : null,
         /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { variant: "secondary", onClick: () => window.api.openDirectory(sitePath), children: "Open directory" }) }),
-        initialized ? /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(import_jsx_runtime54.Fragment, { children: [
+        1 ? /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(import_jsx_runtime54.Fragment, { children: [
           /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(component_default4, { children: [
             /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { isBusy: starting, variant: running ? "secondary" : "primary", onClick: toggleDevServer, children: running ? "Stop dev server" : "Start dev server" }),
             starting || serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("span", { style: { marginLeft: 8 }, children: starting ? "Starting..." : serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("a", { href: serverUrl, onClick: (e) => {

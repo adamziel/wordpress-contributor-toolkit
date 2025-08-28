@@ -208,7 +208,7 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
         <Flex style={{ marginTop: 8, gap: 8, justifyContent: 'flex-start' }}>
           {!initialized ? (<FlexItem><Button isBusy={installing} variant="primary" onClick={runInstall}>Install dependencies</Button></FlexItem>) : null}
           <FlexItem><Button variant="secondary" onClick={()=>window.api.openDirectory(sitePath)}>Open directory</Button></FlexItem>
-          {initialized ? (<>
+          {1 || initialized ? (<>
             <FlexItem>
               <Button isBusy={starting} variant={running ? 'secondary' : 'primary'} onClick={toggleDevServer}>{running ? 'Stop dev server' : 'Start dev server'}</Button>
               {starting || serverUrl ? (

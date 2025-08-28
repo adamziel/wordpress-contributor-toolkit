@@ -37,6 +37,17 @@ function ensureNodeShimDir() {
                 fs.writeFileSync(path.join(nodeShimDir, 'npx.cmd'), npxCmd);
                 fs.writeFileSync(path.join(nodeShimDir, 'npx.bat'), npxCmd);
             } catch {}
+            // Also expose a node.exe that points to Electron's binary so subprocesses can spawn an .exe (no .cmd window)
+            try {
+                const exeTarget = path.join(nodeShimDir, 'node.exe');
+                try {
+                    // Prefer hardlink to avoid copying ~100MB
+                    fs.linkSync(process.execPath, exeTarget);
+                } catch {
+                    // Fallback to copying if hardlink is not possible (e.g. different volumes)
+                    fs.copyFileSync(process.execPath, exeTarget);
+                }
+            } catch {}
         } else {
             const content = `#!/usr/bin/env bash\nELECTRON_RUN_AS_NODE=1 "${process.execPath}" "$@"\n`;
             fs.writeFileSync(path.join(nodeShimDir, 'node'), content, { mode: 0o755 });
@@ -307,7 +318,8 @@ ipcMain.handle('npm:install', async (event, directoryPath) => {
 				'.COM','.EXE','.BAT','.CMD','.VBS','.VBE','.JS','.JSE','.WSF','.WSH','.MSC'
 			].join(';') : process.env.PATHEXT
 		},
-		shell: false
+		shell: false,
+		windowsHide: true
 	});
 
 	runningInstalls[installId] = child;
@@ -345,7 +357,8 @@ ipcMain.handle('npm:run-script', async (event, directoryPath, scriptName, script
 				'.COM','.EXE','.BAT','.CMD','.VBS','.VBE','.JS','.JSE','.WSF','.WSH','.MSC'
 			].join(';') : process.env.PATHEXT
 		},
-		shell: false
+		shell: false,
+		windowsHide: true
 	});
 
 	runningScripts[runId] = child;
@@ -395,7 +408,8 @@ ipcMain.handle('playground:start', async (event, sitePath) => {
 	const child = spawn(process.execPath, [runnerPath, buildDir], {
 		cwd: buildDir,
 		env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-		shell: false
+		shell: false,
+		windowsHide: true
 	});
 	playgroundServers[sitePath] = { child };
 	let resolved = false;
