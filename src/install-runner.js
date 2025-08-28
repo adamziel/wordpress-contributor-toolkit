@@ -21,6 +21,11 @@ async function main() {
 
 		// Prepare argv for the CLI: [node, npm, install]
 		process.argv = [process.execPath, 'npm', 'install'];
+		// Ensure npm treats this as a dev install and uses the Electron Node runtime
+		process.env.npm_config_production = process.env.npm_config_production || 'false';
+		process.env.NODE_ENV = process.env.NODE_ENV || 'development';
+		process.env.npm_node_execpath = process.execPath;
+		process.env.npm_execpath = npmCliAbsPath;
 		process.env.npm_config_loglevel = process.env.npm_config_loglevel || 'verbose';
 		process.env.npm_config_progress = 'false';
 

@@ -27,6 +27,9 @@ async function main() {
 		];
 		process.env.npm_config_loglevel = process.env.npm_config_loglevel || 'verbose';
 		process.env.npm_config_progress = 'false';
+		// Ensure npm uses our Electron Node and JS CLI, not cmd shims
+		process.env.npm_node_execpath = process.execPath;
+		process.env.npm_execpath = npmCliAbsPath;
 
 		require(npmCliAbsPath);
 	} catch (err) {

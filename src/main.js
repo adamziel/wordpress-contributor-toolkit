@@ -37,17 +37,8 @@ function ensureNodeShimDir() {
                 fs.writeFileSync(path.join(nodeShimDir, 'npx.cmd'), npxCmd);
                 fs.writeFileSync(path.join(nodeShimDir, 'npx.bat'), npxCmd);
             } catch {}
-            // Also expose a node.exe that points to Electron's binary so subprocesses can spawn an .exe (no .cmd window)
-            try {
-                const exeTarget = path.join(nodeShimDir, 'node.exe');
-                try {
-                    // Prefer hardlink to avoid copying ~100MB
-                    fs.linkSync(process.execPath, exeTarget);
-                } catch {
-                    // Fallback to copying if hardlink is not possible (e.g. different volumes)
-                    fs.copyFileSync(process.execPath, exeTarget);
-                }
-            } catch {}
+            // Intentionally do NOT create node.exe here, as Electron's exe depends on adjacent DLLs.
+            // Using node.exe from a temp dir causes STATUS_DLL_NOT_FOUND (0xC0000135) when spawned by npm.
         } else {
             const content = `#!/usr/bin/env bash\nELECTRON_RUN_AS_NODE=1 "${process.execPath}" "$@"\n`;
             fs.writeFileSync(path.join(nodeShimDir, 'node'), content, { mode: 0o755 });
@@ -311,6 +302,8 @@ ipcMain.handle('npm:install', async (event, directoryPath) => {
 			...process.env,
 			ELECTRON_RUN_AS_NODE: '1',
 			NODE: process.execPath,
+			npm_config_production: 'false',
+			NODE_ENV: 'development',
 			// On Windows, ensure both PATH and Path are set, and PATHEXT includes .CMD/.BAT
 			PATH: process.platform === 'win32' ? `${ensureNodeShimDir()};${process.env.PATH || ''}` : `${ensureNodeShimDir()}:${process.env.PATH || ''}`,
 			Path: process.platform === 'win32' ? `${ensureNodeShimDir()};${process.env.Path || process.env.PATH || ''}` : undefined,
@@ -351,6 +344,8 @@ ipcMain.handle('npm:run-script', async (event, directoryPath, scriptName, script
 			...process.env,
 			ELECTRON_RUN_AS_NODE: '1',
 			NODE: process.execPath,
+			npm_config_production: 'false',
+			NODE_ENV: 'development',
 			PATH: process.platform === 'win32' ? `${ensureNodeShimDir()};${process.env.PATH || ''}` : `${ensureNodeShimDir()}:${process.env.PATH || ''}`,
 			Path: process.platform === 'win32' ? `${ensureNodeShimDir()};${process.env.Path || process.env.PATH || ''}` : undefined,
 			PATHEXT: process.platform === 'win32' ? [
