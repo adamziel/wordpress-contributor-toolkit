@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
 	getSites: () => ipcRenderer.invoke('sites:get'),
+	getSitesWithMeta: () => ipcRenderer.invoke('sites:getAll'),
 	addSite: (dir) => ipcRenderer.invoke('sites:add', dir),
 	chooseDirectory: () => ipcRenderer.invoke('dialog:choose-dir'),
 	setupWordPress: (dir) => ipcRenderer.invoke('wordpress:setup', dir),
@@ -39,6 +40,8 @@ contextBridge.exposeInMainWorld('api', {
 	}
 ,
 	openExternal: (url) => ipcRenderer.invoke('url:open', url)
+,
+	markSiteInitialized: (sitePath) => ipcRenderer.invoke('sites:mark-initialized', sitePath)
 ,
 	startWpDebug: async (sitePath, onData) => {
 		const handler = (_e, payload) => {

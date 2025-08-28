@@ -46560,28 +46560,39 @@ If there's a particular need for this, please submit a feature request at https:
   var import_jsx_runtime51 = __toESM(require_jsx_runtime());
   function useSites() {
     const [sites, setSites] = (0, import_react66.useState)([]);
+    const [siteMeta, setSiteMeta] = (0, import_react66.useState)({});
     const refresh = (0, import_react66.useCallback)(async () => {
-      const list = await window.api.getSites();
+      const { sites: list, siteMeta: meta } = await window.api.getSitesWithMeta();
       setSites(list);
+      setSiteMeta(meta || {});
     }, []);
     (0, import_react66.useEffect)(() => {
       refresh();
     }, [refresh]);
-    return { sites, refresh };
+    return { sites, siteMeta, refresh, setSiteMeta };
   }
-  function SiteRow({ sitePath, onServerLog, onWpLog }) {
+  function SiteRow({ sitePath, initialized, createdAt, onInitialized, onServerLog, onWpLog }) {
     const [serverUrl, setServerUrl] = (0, import_react66.useState)("");
     const [starting, setStarting] = (0, import_react66.useState)(false);
     const [running, setRunning] = (0, import_react66.useState)(false);
+    const [installing, setInstalling] = (0, import_react66.useState)(false);
+    const siteName = sitePath.split("/").pop();
+    const createdLabel = createdAt ? new Date(createdAt).toLocaleString() : "";
     const runInstall = (0, import_react66.useCallback)(() => {
+      setInstalling(true);
       window.api.runNpmInstall(sitePath, ({ type, data }) => {
         onServerLog(`[install ${type}] ${data}`);
-      }, ({ code }) => {
+      }, async ({ code }) => {
         onServerLog(`
 install exited with code ${code}
 `);
+        setInstalling(false);
+        if (code === 0) {
+          await window.api.markSiteInitialized(sitePath);
+          onInitialized(sitePath);
+        }
       });
-    }, [sitePath, onServerLog]);
+    }, [sitePath, onServerLog, onInitialized]);
     const runScript = (0, import_react66.useCallback)((name) => {
       window.api.runNpmScript(sitePath, name, [], ({ type, data }) => {
         onServerLog(`[${name} ${type}] ${data}`);
@@ -46614,7 +46625,7 @@ ${name} exited with code ${code}
         await window.api.stopServer(sitePath);
         window.api.stopWpDebug(sitePath);
       }
-    }, [running, sitePath, onServerLog]);
+    }, [running, sitePath, onServerLog, onWpLog]);
     const toggleDevServer = async () => {
       if (!running) {
         runScript("watch");
@@ -46622,60 +46633,110 @@ ${name} exited with code ${code}
       toggleServer();
     };
     return /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default6, { style: { marginBottom: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default8, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { className: "path", style: { fontFamily: "Menlo, monospace", fontSize: 12, color: "#333", wordBreak: "break-all" }, children: sitePath }),
-      /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default3, { style: { marginTop: 8, gap: 8 }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { variant: "secondary", onClick: runInstall, children: "npm install" }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { variant: "secondary", onClick: () => window.api.openDirectory(sitePath), children: "Open directory" }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
-          dropdown_menu_default,
-          {
-            icon: chevron_down_default,
-            label: "Run command",
-            text: "Run command",
-            controls: [
-              { title: "npm run build", onClick: () => runScript("build") },
-              { title: "npm run build:dev", onClick: () => runScript("build:dev") },
-              { title: "npm run dev", onClick: () => runScript("dev") },
-              { title: "npm run test", onClick: () => runScript("test") },
-              { title: "npm run watch", onClick: () => runScript("watch") },
-              { title: "npm run grunt", onClick: () => runScript("grunt") }
-            ]
-          }
-        ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default4, { isBlock: true, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { variant: running ? "secondary" : "primary", onClick: toggleDevServer, children: running ? "Stop dev server" : "Start dev server" }),
-          /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("span", { style: { marginLeft: 8 }, children: starting ? "Starting..." : serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("a", { href: serverUrl, onClick: (e) => {
-            e.preventDefault();
-            window.api.openExternal(serverUrl);
-          }, children: serverUrl }) : null })
+      /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default3, { align: "center", justify: "space-between", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { fontWeight: 600 }, children: siteName }),
+        /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { style: { fontSize: 12, color: "#666" }, children: [
+          initialized ? "Initialized" : "Uninitialized",
+          createdLabel ? ` \u2022 Created ${createdLabel}` : ""
         ] })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { className: "path", style: { marginTop: 4, fontFamily: "Menlo, monospace", fontSize: 12, color: "#333", wordBreak: "break-all" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("span", { style: { color: "#666" }, children: "Path:" }),
+        " ",
+        sitePath
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default3, { style: { marginTop: 8, gap: 8, justifyContent: "flex-start" }, children: [
+        !initialized ? /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { isBusy: installing, variant: "primary", onClick: runInstall, children: "Install dependencies" }) }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { variant: "secondary", onClick: () => window.api.openDirectory(sitePath), children: "Open directory" }) }),
+        initialized ? /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(import_jsx_runtime51.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
+            dropdown_menu_default,
+            {
+              icon: chevron_down_default,
+              label: "Run command",
+              text: "Run command",
+              controls: [
+                { title: "npm run build", onClick: () => runScript("build") },
+                { title: "npm run build:dev", onClick: () => runScript("build:dev") },
+                { title: "npm run dev", onClick: () => runScript("dev") },
+                { title: "npm run test", onClick: () => runScript("test") },
+                { title: "npm run watch", onClick: () => runScript("watch") },
+                { title: "npm run grunt", onClick: () => runScript("grunt") }
+              ]
+            }
+          ) }),
+          /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default4, { isBlock: true, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { variant: running ? "secondary" : "primary", onClick: toggleDevServer, children: running ? "Stop dev server" : "Start dev server" }),
+            /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("span", { style: { marginLeft: 8 }, children: starting ? "Starting..." : serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("a", { href: serverUrl, onClick: (e) => {
+              e.preventDefault();
+              window.api.openExternal(serverUrl);
+            }, children: serverUrl }) : null })
+          ] })
+        ] }) : null
       ] })
     ] }) });
   }
   function App() {
-    const { sites, refresh } = useSites();
+    const { sites, siteMeta, refresh, setSiteMeta } = useSites();
     const [logs, setLogs] = (0, import_react66.useState)("");
     const [serverLogs, setServerLogs] = (0, import_react66.useState)("");
     const [wpLogs, setWpLogs] = (0, import_react66.useState)("");
+    const [downloading, setDownloading] = (0, import_react66.useState)(false);
+    const [downloadPct, setDownloadPct] = (0, import_react66.useState)(0);
     const appendLog = (0, import_react66.useCallback)((s) => setLogs((v) => v + s), []);
     const appendServerLog = (0, import_react66.useCallback)((s) => setServerLogs((v) => v + s), []);
     const appendWpLog = (0, import_react66.useCallback)((s) => setWpLogs((v) => v + s), []);
+    (0, import_react66.useEffect)(() => {
+      const handler = (_e, p) => {
+        if (!p || typeof p.percent !== "number") return;
+        setDownloading(true);
+        setDownloadPct(Math.round(p.percent));
+      };
+      window.require?.("electron")?.ipcRenderer?.on?.("download:progress", handler);
+      return () => window.require?.("electron")?.ipcRenderer?.removeListener?.("download:progress", handler);
+    }, []);
     const chooseAndSetup = (0, import_react66.useCallback)(async () => {
       const dir = await window.api.chooseDirectory();
       if (!dir) return;
       try {
-        await window.api.setupWordPress(dir);
+        setDownloading(true);
+        setDownloadPct(0);
+        const sitePath = await window.api.setupWordPress(dir);
+        setDownloading(false);
+        setDownloadPct(100);
         await refresh();
       } catch (e) {
+        setDownloading(false);
         appendLog(String(e));
       }
     }, [refresh, appendLog]);
+    const onInitialized = (0, import_react66.useCallback)((sitePath) => {
+      setSiteMeta((m) => ({ ...m || {}, [sitePath]: { ...m?.[sitePath] || {}, initialized: true } }));
+    }, [setSiteMeta]);
     return /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { style: { margin: 16, fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" }, children: [
       /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default3, { align: "center", justify: "space-between", style: { marginBottom: 12 }, children: [
         /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("h2", { style: { margin: 0 }, children: "WordPress Core Sites" }),
         sites.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { icon: plus_default, variant: "primary", onClick: chooseAndSetup, children: "Setup another site" }) : null
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { id: "sites", children: sites.length > 0 ? sites.map((s) => /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(SiteRow, { sitePath: s, onServerLog: appendServerLog, onWpLog: appendWpLog }, s)) : /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default6, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default8, { children: [
+      downloading && /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { style: { marginBottom: 12 }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { background: "#eee", borderRadius: 4, overflow: "hidden", height: 10 }, children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { width: `${downloadPct}%`, height: "100%", background: "#007cba", transition: "width 0.2s" } }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)("div", { style: { fontSize: 12, color: "#555", marginTop: 4 }, children: [
+          downloadPct,
+          "%"
+        ] })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { id: "sites", children: sites.length > 0 ? sites.map((s) => /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
+        SiteRow,
+        {
+          sitePath: s,
+          initialized: Boolean(siteMeta?.[s]?.initialized),
+          createdAt: siteMeta?.[s]?.createdAt,
+          onInitialized,
+          onServerLog: appendServerLog,
+          onWpLog: appendWpLog
+        },
+        s
+      )) : /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(component_default6, { children: /* @__PURE__ */ (0, import_jsx_runtime51.jsxs)(component_default8, { children: [
         /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { style: { marginBottom: 8 }, children: "No sites yet." }),
         /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(button_default, { icon: plus_default, variant: "primary", onClick: chooseAndSetup, children: "Setup your first site" })
       ] }) }) }),

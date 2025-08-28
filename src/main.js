@@ -14,7 +14,7 @@ const storeReady = import('electron-store').then((m) => {
 	const Store = m.default || m;
 	store = new Store({
 		name: 'settings',
-		defaults: { sites: [] }
+		defaults: { sites: [], siteMeta: {} }
 	});
 });
 
@@ -63,12 +63,20 @@ ipcMain.handle('sites:get', async () => {
 	return s.get('sites');
 });
 
+ipcMain.handle('sites:getAll', async () => {
+	const s = await getStore();
+	return { sites: s.get('sites'), siteMeta: s.get('siteMeta') };
+});
+
 ipcMain.handle('sites:add', async (_e, sitePath) => {
 	const s = await getStore();
 	const sites = s.get('sites');
 	if (!sites.includes(sitePath)) {
 		sites.push(sitePath);
 		s.set('sites', sites);
+		const meta = s.get('siteMeta');
+		meta[sitePath] = meta[sitePath] || { initialized: false, createdAt: new Date().toISOString() };
+		s.set('siteMeta', meta);
 	}
 	return sites;
 });
@@ -109,10 +117,21 @@ ipcMain.handle('wordpress:setup', async (event, destDir) => {
 		if (!sites.includes(extractedDir)) {
 			sites.push(extractedDir);
 			s.set('sites', sites);
+			const meta = s.get('siteMeta');
+			meta[extractedDir] = { initialized: false, createdAt: new Date().toISOString() };
+			s.set('siteMeta', meta);
 		}
 		return extractedDir;
 	}
 	return destDir;
+});
+
+ipcMain.handle('sites:mark-initialized', async (_e, sitePath) => {
+	const s = await getStore();
+	const meta = s.get('siteMeta');
+	meta[sitePath] = { ...(meta[sitePath] || {}), initialized: true };
+	s.set('siteMeta', meta);
+	return true;
 });
 
 ipcMain.handle('dir:open', async (_e, directoryPath) => {

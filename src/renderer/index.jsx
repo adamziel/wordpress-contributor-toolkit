@@ -14,12 +14,14 @@ import '@wordpress/components/build-style/style.css';
 
 function useSites() {
   const [sites, setSites] = useState([]);
+  const [siteMeta, setSiteMeta] = useState({});
   const refresh = useCallback(async () => {
-    const list = await window.api.getSites();
+    const { sites: list, siteMeta: meta } = await window.api.getSitesWithMeta();
     setSites(list);
+    setSiteMeta(meta || {});
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
-  return { sites, refresh };
+  return { sites, siteMeta, refresh, setSiteMeta };
 }
 
 function LogPanel({ title, bg = '#111', color = '#eee' }) {
@@ -36,18 +38,28 @@ function LogPanel({ title, bg = '#111', color = '#eee' }) {
   );
 }
 
-function SiteRow({ sitePath, onServerLog, onWpLog }) {
+function SiteRow({ sitePath, initialized, createdAt, onInitialized, onServerLog, onWpLog }) {
   const [serverUrl, setServerUrl] = useState('');
   const [starting, setStarting] = useState(false);
   const [running, setRunning] = useState(false);
+  const [installing, setInstalling] = useState(false);
+
+  const siteName = sitePath.split('/').pop();
+  const createdLabel = createdAt ? new Date(createdAt).toLocaleString() : '';
 
   const runInstall = useCallback(() => {
+    setInstalling(true);
     window.api.runNpmInstall(sitePath, ({ type, data }) => {
       onServerLog(`[install ${type}] ${data}`);
-    }, ({ code }) => {
+    }, async ({ code }) => {
       onServerLog(`\ninstall exited with code ${code}\n`);
+      setInstalling(false);
+      if (code === 0) {
+        await window.api.markSiteInitialized(sitePath);
+        onInitialized(sitePath);
+      }
     });
-  }, [sitePath, onServerLog]);
+  }, [sitePath, onServerLog, onInitialized]);
 
   const runScript = useCallback((name) => {
     window.api.runNpmScript(sitePath, name, [], ({ type, data }) => {
@@ -75,13 +87,12 @@ function SiteRow({ sitePath, onServerLog, onWpLog }) {
           setServerUrl('');
         }
       );
-      // Start tailing WP debug log
       window.api.startWpDebug(sitePath, (data) => onWpLog(`[${sitePath}] ${data}`));
     } else {
       await window.api.stopServer(sitePath);
       window.api.stopWpDebug(sitePath);
     }
-  }, [running, sitePath, onServerLog]);
+  }, [running, sitePath, onServerLog, onWpLog]);
 
   const toggleDevServer = async () => {
     if (!running) {
@@ -93,34 +104,52 @@ function SiteRow({ sitePath, onServerLog, onWpLog }) {
   return (
     <Card style={{ marginBottom: 12 }}>
       <CardBody>
-        <div className="path" style={{ fontFamily: 'Menlo, monospace', fontSize: 12, color: '#333', wordBreak: 'break-all' }}>{sitePath}</div>
-        <Flex style={{ marginTop: 8, gap: 8 }}>
+        <Flex align="center" justify="space-between">
+          <div style={{ fontWeight: 600 }}>{siteName}</div>
+          <div style={{ fontSize: 12, color: '#666' }}>
+            {initialized ? 'Initialized' : 'Uninitialized'}
+            {createdLabel ? ` • Created ${createdLabel}` : ''}
+          </div>
+        </Flex>
+        <div className="path" style={{ marginTop: 4, fontFamily: 'Menlo, monospace', fontSize: 12, color: '#333', wordBreak: 'break-all' }}>
+          <span style={{ color: '#666' }}>Path:</span> {sitePath}
+        </div>
+        <Flex style={{ marginTop: 8, gap: 8, justifyContent: 'flex-start' }}>
+          {!initialized ? (
+            <FlexItem>
+              <Button isBusy={installing} variant="primary" onClick={runInstall}>Install dependencies</Button>
+            </FlexItem>
+          ) : null}
           <FlexItem>
             <Button variant="secondary" onClick={() => window.api.openDirectory(sitePath)}>Open directory</Button>
           </FlexItem>
-          <FlexItem isBlock>
-            <Button variant={running ? 'secondary' : 'primary'} onClick={toggleDevServer}>{running ? 'Stop dev server' : 'Start dev server'}</Button>
-            <span style={{ marginLeft: 8 }}>
-              {starting ? 'Starting...' : serverUrl ? (
-                <a href={serverUrl} onClick={(e) => { e.preventDefault(); window.api.openExternal(serverUrl); }}>{serverUrl}</a>
-              ) : null}
-            </span>
-          </FlexItem>
-          <FlexItem>
-            <DropdownMenu
-              icon={chevronDown}
-              label="Run command"
-              text="Run command"
-              controls={[
-                { title: 'npm run build', onClick: () => runScript('build') },
-                { title: 'npm run build:dev', onClick: () => runScript('build:dev') },
-                { title: 'npm run dev', onClick: () => runScript('dev') },
-                { title: 'npm run test', onClick: () => runScript('test') },
-                { title: 'npm run watch', onClick: () => runScript('watch') },
-                { title: 'npm run grunt', onClick: () => runScript('grunt') },
-              ]}
-            />
-          </FlexItem>
+          {initialized ? (
+            <>
+              <FlexItem>
+                <DropdownMenu
+                  icon={chevronDown}
+                  label="Run command"
+                  text="Run command"
+                  controls={[
+                    { title: 'npm run build', onClick: () => runScript('build') },
+                    { title: 'npm run build:dev', onClick: () => runScript('build:dev') },
+                    { title: 'npm run dev', onClick: () => runScript('dev') },
+                    { title: 'npm run test', onClick: () => runScript('test') },
+                    { title: 'npm run watch', onClick: () => runScript('watch') },
+                    { title: 'npm run grunt', onClick: () => runScript('grunt') },
+                  ]}
+                />
+              </FlexItem>
+              <FlexItem isBlock>
+                <Button variant={running ? 'secondary' : 'primary'} onClick={toggleDevServer}>{running ? 'Stop dev server' : 'Start dev server'}</Button>
+                <span style={{ marginLeft: 8 }}>
+                  {starting ? 'Starting...' : serverUrl ? (
+                    <a href={serverUrl} onClick={(e) => { e.preventDefault(); window.api.openExternal(serverUrl); }}>{serverUrl}</a>
+                  ) : null}
+                </span>
+              </FlexItem>
+            </>
+          ) : null}
         </Flex>
       </CardBody>
     </Card>
@@ -128,24 +157,45 @@ function SiteRow({ sitePath, onServerLog, onWpLog }) {
 }
 
 function App() {
-  const { sites, refresh } = useSites();
+  const { sites, siteMeta, refresh, setSiteMeta } = useSites();
   const [logs, setLogs] = useState('');
   const [serverLogs, setServerLogs] = useState('');
   const [wpLogs, setWpLogs] = useState('');
+  const [downloading, setDownloading] = useState(false);
+  const [downloadPct, setDownloadPct] = useState(0);
   const appendLog = useCallback((s) => setLogs((v) => v + s), []);
   const appendServerLog = useCallback((s) => setServerLogs((v) => v + s), []);
   const appendWpLog = useCallback((s) => setWpLogs((v) => v + s), []);
+
+  useEffect(() => {
+    const handler = (_e, p) => {
+      if (!p || typeof p.percent !== 'number') return;
+      setDownloading(true);
+      setDownloadPct(Math.round(p.percent));
+    };
+    window.require?.('electron')?.ipcRenderer?.on?.('download:progress', handler);
+    return () => window.require?.('electron')?.ipcRenderer?.removeListener?.('download:progress', handler);
+  }, []);
 
   const chooseAndSetup = useCallback(async () => {
     const dir = await window.api.chooseDirectory();
     if (!dir) return;
     try {
-      await window.api.setupWordPress(dir);
+      setDownloading(true);
+      setDownloadPct(0);
+      const sitePath = await window.api.setupWordPress(dir);
+      setDownloading(false);
+      setDownloadPct(100);
       await refresh();
     } catch (e) {
+      setDownloading(false);
       appendLog(String(e));
     }
   }, [refresh, appendLog]);
+
+  const onInitialized = useCallback((sitePath) => {
+    setSiteMeta((m) => ({ ...(m || {}), [sitePath]: { ...(m?.[sitePath] || {}), initialized: true } }));
+  }, [setSiteMeta]);
 
   return (
     <div style={{ margin: 16, fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif' }}>
@@ -156,10 +206,27 @@ function App() {
         ) : null}
       </Flex>
 
+      {downloading && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ background: '#eee', borderRadius: 4, overflow: 'hidden', height: 10 }}>
+            <div style={{ width: `${downloadPct}%`, height: '100%', background: '#007cba', transition: 'width 0.2s' }} />
+          </div>
+          <div style={{ fontSize: 12, color: '#555', marginTop: 4 }}>{downloadPct}%</div>
+        </div>
+      )}
+
       <div id="sites">
         {sites.length > 0 ? (
           sites.map((s) => (
-            <SiteRow key={s} sitePath={s} onServerLog={appendServerLog} onWpLog={appendWpLog} />
+            <SiteRow
+              key={s}
+              sitePath={s}
+              initialized={Boolean(siteMeta?.[s]?.initialized)}
+              createdAt={siteMeta?.[s]?.createdAt}
+              onInitialized={onInitialized}
+              onServerLog={appendServerLog}
+              onWpLog={appendWpLog}
+            />
           ))
         ) : (
           <Card>
