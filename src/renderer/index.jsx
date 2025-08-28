@@ -138,7 +138,9 @@ function App() {
     <div style={{ margin: 16, fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif' }}>
       <Flex align="center" justify="space-between" style={{ marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>WordPress Core Sites</h2>
-        <Button icon={plus} variant="primary" onClick={chooseAndSetup}>Setup another site</Button>
+        {sites.length > 0 ? (
+          <Button icon={plus} variant="primary" onClick={chooseAndSetup}>Setup another site</Button>
+        ) : null}
       </Flex>
 
       <div id="sites">
