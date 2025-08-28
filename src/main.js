@@ -7,6 +7,7 @@ const https = require('https');
 const extract = require('extract-zip');
 const git = require('isomorphic-git');
 const http = require('isomorphic-git/http/node');
+const JsDiff = require('diff');
 const { spawn } = require('child_process');
 
 const WORDPRESS_ZIP_URL = 'https://github.com/WordPress/wordpress-develop/archive/refs/heads/trunk.zip';
@@ -50,6 +51,71 @@ function createWindow() {
 
 	mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
+function buildPatchHtml(content) {
+    return `<!doctype html><html><head><meta charset="utf-8"/><title>Patch</title>
+    <style>body{font-family:Menlo,monospace;padding:12px;} pre{white-space:pre-wrap;background:#111;color:#eee;padding:12px;border-radius:6px;height:85vh;overflow:auto} .bar{position:sticky;top:0;background:#fff;padding:8px 0} button{padding:6px 10px}</style>
+    </head><body>
+    <div class="bar"><button id="copy">Copy</button></div>
+    <pre id="pre"></pre>
+    <script>
+    const pre=document.getElementById('pre');
+    pre.textContent = ${JSON.stringify(content)};
+    document.getElementById('copy').addEventListener('click', async () => { try { await navigator.clipboard.writeText(pre.textContent); } catch {} });
+    </script>
+    </body></html>`;
+}
+
+async function createMinimalPatchForDir(dir) {
+    // Ensure we have origin/trunk and HEAD reference
+    try { await git.resolveRef({ fs, dir, ref: 'refs/remotes/origin/trunk' }); }
+    catch { await git.fetch({ fs, http, dir, url: WORDPRESS_GIT_URL, depth: 1, singleBranch: true, ref: 'trunk' }); }
+    let headOid = null;
+    try { headOid = await git.resolveRef({ fs, dir, ref: 'HEAD' }); } catch {}
+    if (!headOid) {
+        // fallback to local trunk if HEAD missing
+        try { headOid = await git.resolveRef({ fs, dir, ref: 'refs/heads/trunk' }); } catch {}
+    }
+
+    // Compare working tree vs HEAD (which points to trunk tip after clone)
+    const matrix = await git.statusMatrix({ fs, dir });
+    const changed = matrix.filter(([filepath, head, workdir, stage]) => head !== workdir);
+    let patch = '';
+    for (const [filepath, head, workdir] of changed) {
+        const abs = require('path').join(dir, filepath);
+        const workBuf = workdir ? await fs.promises.readFile(abs).catch(() => null) : null;
+        const base = head && headOid ? await git.readBlob({ fs, dir, oid: headOid, filepath }).catch(() => null) : null;
+        const a = base ? Buffer.from(base.blob).toString('utf8') : '';
+        const b = workBuf ? workBuf.toString('utf8') : a;
+        if (a === b) continue;
+        // Skip likely-binary
+        if ((a.indexOf('\0') !== -1) || (b.indexOf('\0') !== -1)) continue;
+        const filePatch = JsDiff.createTwoFilesPatch(`a/${filepath}`, `b/${filepath}`, a, b, '', '', { context: 3 });
+        patch += filePatch + '\n';
+    }
+    return patch || 'No changes.';
+}
+
+ipcMain.handle('git:get-patch', async (_e, sitePath) => {
+    try {
+        const patch = await createMinimalPatchForDir(sitePath);
+        return { ok: true, patch };
+    } catch (e) {
+        return { ok: false, error: String(e) };
+    }
+});
+
+ipcMain.handle('git:create-patch', async (_e, sitePath) => {
+    try {
+        const patch = await createMinimalPatchForDir(sitePath);
+        const win = new BrowserWindow({ width: 900, height: 700, webPreferences: { contextIsolation: true, nodeIntegration: false } });
+        win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(buildPatchHtml(patch || 'No changes.')));
+        return { ok: true };
+    } catch (e) {
+        const win = new BrowserWindow({ width: 900, height: 700, webPreferences: { contextIsolation: true, nodeIntegration: false } });
+        win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(buildPatchHtml('Failed to generate diff: ' + String(e))));
+        return { ok: false, error: String(e) };
+    }
+});
 
 app.whenReady().then(() => {
 	createWindow();

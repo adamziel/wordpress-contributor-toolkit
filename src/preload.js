@@ -62,6 +62,10 @@ contextBridge.exposeInMainWorld('api', {
 		return () => ipcRenderer.removeListener('download:status', h);
 	}
 ,
+	createPatchWindow: (sitePath) => ipcRenderer.invoke('git:create-patch', sitePath)
+,
+	getPatch: (sitePath) => ipcRenderer.invoke('git:get-patch', sitePath)
+,
 	startWpDebug: async (sitePath, onData) => {
 		const handler = (_e, payload) => {
 			if (payload.sitePath === sitePath) onData && onData(payload.data);
