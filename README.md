@@ -19,7 +19,7 @@ Getting a Core dev environment running (Node, npm, git, PHP/MySQL or an alternat
 
 #### Video demo
 
-<video src="docs/video.mp4" width="300" alt="UI"></video>
+![Video demo](docs/video.mp4)
 
 #### UI
 
