@@ -13,6 +13,24 @@ const { spawn } = require('child_process');
 const WORDPRESS_ZIP_URL = 'https://github.com/WordPress/wordpress-develop/archive/refs/heads/trunk.zip';
 const WORDPRESS_GIT_URL = 'https://github.com/WordPress/wordpress-develop.git';
 
+// Provide a PATH shim so npm's spawned scripts can find a 'node' binary that maps to Electron's Node
+let nodeShimDir = null;
+function ensureNodeShimDir() {
+    if (nodeShimDir) return nodeShimDir;
+    nodeShimDir = path.join(os.tmpdir(), `electron-node-shims-${process.pid}`);
+    fse.ensureDirSync(nodeShimDir);
+    try {
+        if (process.platform === 'win32') {
+            const content = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" %*\r\n`;
+            fs.writeFileSync(path.join(nodeShimDir, 'node.cmd'), content);
+        } else {
+            const content = `#!/usr/bin/env bash\nELECTRON_RUN_AS_NODE=1 "${process.execPath}" "$@"\n`;
+            fs.writeFileSync(path.join(nodeShimDir, 'node'), content, { mode: 0o755 });
+        }
+    } catch {}
+    return nodeShimDir;
+}
+
 let store; // initialized asynchronously due to ESM-only module
 const storeReady = import('electron-store').then((m) => {
 	const Store = m.default || m;
@@ -255,7 +273,9 @@ ipcMain.handle('npm:install', async (event, directoryPath) => {
 		cwd: directoryPath,
 		env: {
 			...process.env,
-			ELECTRON_RUN_AS_NODE: '1'
+			ELECTRON_RUN_AS_NODE: '1',
+			NODE: process.execPath,
+			PATH: process.platform === 'win32' ? `${ensureNodeShimDir()};${process.env.PATH || ''}` : `${ensureNodeShimDir()}:${process.env.PATH || ''}`
 		},
 		shell: false
 	});
@@ -285,7 +305,12 @@ ipcMain.handle('npm:run-script', async (event, directoryPath, scriptName, script
 
 	const child = spawn(process.execPath, [runnerPath, directoryPath, scriptName, ...scriptArgs], {
 		cwd: directoryPath,
-		env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+		env: {
+			...process.env,
+			ELECTRON_RUN_AS_NODE: '1',
+			NODE: process.execPath,
+			PATH: process.platform === 'win32' ? `${ensureNodeShimDir()};${process.env.PATH || ''}` : `${ensureNodeShimDir()}:${process.env.PATH || ''}`
+		},
 		shell: false
 	});
 

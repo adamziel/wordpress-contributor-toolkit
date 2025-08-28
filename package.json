@@ -10,7 +10,22 @@
     "build:once": "esbuild src/renderer/index.jsx --bundle --outdir=src/renderer --loader:.css=css --platform=browser --format=iife --jsx=automatic --log-level=info",
     "postinstall": "electron-builder install-app-deps",
     "dist:win": "electron-builder --win --publish never",
+    "dist:win:arm64": "electron-builder --win --arm64 --publish never",
     "dist": "electron-builder --publish never"
+  },
+  "build": {
+    "appId": "org.wordpress.contributor.toolkit",
+    "productName": "WordPress Contributor Toolkit",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
+    }
   },
   "dependencies": {
     "@wp-playground/cli": "^2.0.13",
