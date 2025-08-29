@@ -104,6 +104,14 @@ contextBridge.exposeInMainWorld('api', {
 		return await ipcRenderer.invoke('playground:stop', sitePath);
 	}
 ,
+	getSiteStatus: async (sitePath) => {
+		return await ipcRenderer.invoke('site:status', sitePath);
+	}
+,
+	setSkipInitWizard: async (sitePath, skip) => {
+		return await ipcRenderer.invoke('sites:set-skip-init', sitePath, skip);
+	}
+,
 	// SMTP bridge
 	getEmails: async (sitePath) => {
 		return await ipcRenderer.invoke('smtp:get', sitePath);

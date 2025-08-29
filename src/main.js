@@ -309,6 +309,32 @@ ipcMain.handle('sites:getAll', async () => {
 	return { sites: s.get('sites'), siteMeta: s.get('siteMeta') };
 });
 
+ipcMain.handle('site:status', async (_e, sitePath) => {
+	try {
+		const nmDir = path.join(sitePath, 'node_modules');
+		const hasNodeModules = fs.existsSync(nmDir) && (() => { try { return fs.readdirSync(nmDir).length > 0; } catch { return false; } })();
+
+		const distDir = path.join(sitePath, 'build', 'wp-includes', 'js', 'dist');
+		const hasBuilt = fs.existsSync(distDir);
+
+		const s = await getStore();
+		const meta = s.get('siteMeta') || {};
+		const m = meta[sitePath] || {};
+
+		return { hasNodeModules, hasBuilt, skipInitWizard: Boolean(m.skipInitWizard), initialized: Boolean(m.initialized) };
+	} catch (e) {
+		return { hasNodeModules: false, hasBuilt: false, skipInitWizard: false, initialized: false };
+	}
+});
+
+ipcMain.handle('sites:set-skip-init', async (_e, sitePath, skip) => {
+	const s = await getStore();
+	const meta = s.get('siteMeta') || {};
+	meta[sitePath] = { ...(meta[sitePath] || {}), skipInitWizard: Boolean(skip) };
+	s.set('siteMeta', meta);
+	return true;
+});
+
 ipcMain.handle('sites:add', async (_e, sitePath) => {
 	const s = await getStore();
 	const sites = s.get('sites');

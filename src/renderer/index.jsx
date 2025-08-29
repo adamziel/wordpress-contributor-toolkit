@@ -96,7 +96,7 @@ function App() {
         )}
 
         {sites.length > 0 ? (
-          sites.map((s) => (
+          sites.sort((a, b) => (siteMeta?.[b]?.createdAt || 0) - (siteMeta?.[a]?.createdAt || 0)).map((s) => (
             <SiteRow
               key={s}
               sitePath={s}
@@ -139,6 +139,11 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
   const [isEmailOpen, setIsEmailOpen] = useState(false);
   const [activeEmail, setActiveEmail] = useState(null);
   const [emailViewTab, setEmailViewTab] = useState('rendered');
+  const [building, setBuilding] = useState(false);
+  const [hasNodeModules, setHasNodeModules] = useState(false);
+  const [hasBuilt, setHasBuilt] = useState(false);
+  const [skipInit, setSkipInit] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(true);
 
   // sticky refs
   const npmRef = useRef(null); const serverRef = useRef(null); const wpRef = useRef(null);
@@ -153,6 +158,17 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
   const sortEmails = useCallback((list)=>[...list].sort((a,b)=>new Date(b.sentAt||b.date||0)-new Date(a.sentAt||a.date||0)),[]);
   const openEmail = useCallback((m)=>{ setActiveEmail(m); setEmailViewTab('rendered'); setIsEmailOpen(true); },[]);
   const clearEmails = useCallback(async ()=>{ await window.api.clearEmails(sitePath); setEmails([]); }, [sitePath]);
+  const loadStatus = useCallback(async ()=>{
+    try {
+      setStatusLoading(true);
+      const s = await window.api.getSiteStatus(sitePath);
+      setHasNodeModules(Boolean(s?.hasNodeModules));
+      setHasBuilt(Boolean(s?.hasBuilt));
+      setSkipInit(Boolean(s?.skipInitWizard));
+    } catch {}
+    finally { setStatusLoading(false); }
+  }, [sitePath]);
+  useEffect(()=>{ loadStatus(); }, [loadStatus]);
 
   const runInstall = () => {
     setInstalling(true); setSelectedTab('npm'); setStick(true); window.api.runNpmInstall(sitePath, ({ data }) => appendNpm(data), async ({ code }) => {
@@ -177,13 +193,15 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
        * 
        * @TODO: Do not mark as initialized if the installation fails.
        */
-      if (1 || code === 0) { await window.api.markSiteInitialized(sitePath); onInitialized(sitePath); }
+      if (1 || code === 0) { try { await window.api.markSiteInitialized(sitePath); } catch {} onInitialized(sitePath); }
+      try { await loadStatus(); } catch {}
     });
   };
-  const runScript = (name)=>{ setSelectedTab('npm'); setStick(true); window.api.runNpmScript(sitePath,name,[],({data})=>appendNpm(data),({code})=>appendNpm(`\n${name} exited with code ${code}\n`)); };
+  const runScript = (name)=>{ setSelectedTab('npm'); setStick(true); if (name === 'build') setBuilding(true); window.api.runNpmScript(sitePath,name,[],({data})=>appendNpm(data),async ({code})=>{ appendNpm(`\n${name} exited with code ${code}\n`); if (name === 'build') { setBuilding(false); try { await loadStatus(); } catch {} } }); };
   const killCurrent = async ()=>{ await window.api.npmKill({ directoryPath: sitePath }); };
   const toggleServer = async ()=>{
     if(!running){
+      if (!skipInit && !hasBuilt) { alert('Please complete the first full build before starting the dev server. You can also skip the wizard.'); return; }
       setStarting(true); setSelectedTab('server'); setStick(true);
       // Subscribe to SMTP events before starting to avoid missing early events
       if (!smtpStartedUnsubRef.current) smtpStartedUnsubRef.current = window.api.onSmtpStarted(sitePath, (port)=>setSmtpPort(port||0));
@@ -232,10 +250,51 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
           </div>
         </Flex>
         <div className="path" style={{ marginTop: 4, fontFamily: 'Menlo, monospace', fontSize: 12, color: '#333', wordBreak: 'break-all' }}><span style={{ color: '#666' }}>Path:</span> {sitePath}</div>
-        <Flex style={{ marginTop: 8, gap: 8, justifyContent: 'flex-start' }}>
-          {!initialized ? (<FlexItem><Button isBusy={installing} variant="primary" onClick={runInstall}>Install dependencies</Button></FlexItem>) : null}
-          <FlexItem><Button variant="secondary" onClick={()=>window.api.openDirectory(sitePath)}>Open directory</Button></FlexItem>
-          {1 || initialized ? (<>
+        {!skipInit ? (
+          <div style={{ marginTop: 8, padding: 8, border: '1px solid #eee', borderRadius: 6, background: '#fafafa' }}>
+            <div style={{ marginBottom: 6, color: '#333' }}>First, install the dependencies, then run a full build. After that, start the dev server.</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Button
+                isBusy={installing}
+                variant={hasNodeModules ? 'secondary' : 'primary'}
+                onClick={runInstall}
+                disabled={installing || hasNodeModules}
+              >{hasNodeModules ? 'Dependencies installed' : 'Install dependencies'}</Button>
+              <span style={{ color: '#999' }}>→</span>
+              <Button
+                isBusy={building}
+                variant={hasBuilt ? 'secondary' : 'primary'}
+                onClick={()=>runScript('build')}
+                disabled={building || (!hasNodeModules) || hasBuilt}
+              >{hasBuilt ? 'First build complete' : 'First full build'}</Button>
+              <span style={{ color: '#999' }}>→</span>
+              <Button
+                isBusy={starting}
+                variant={running ? 'secondary' : 'primary'}
+                onClick={async () => {
+                  await window.api.setSkipInitWizard(sitePath, true);
+                  setSkipInit(true);
+                  toggleDevServer();
+                }}
+                disabled={starting || (!hasBuilt)}
+              >{running ? 'Stop dev server' : 'Start dev server and finish the wizard'}</Button>
+              <div style={{ marginLeft: 'auto' }}>
+                <Button variant="link" onClick={async ()=>{ await window.api.setSkipInitWizard(sitePath, true); setSkipInit(true); }} style={{ textDecoration: 'underline' }}>Skip initialization wizard</Button>
+              </div>
+            </div>
+            <div style={{ marginTop: 6, fontSize: 12, color: '#555' }}>
+              <span>node_modules: {hasNodeModules ? '✓' : '✗'}</span>
+              <span style={{ marginLeft: 12 }}>dist present: {hasBuilt ? '✓' : '✗'}</span>
+            </div>
+          </div>
+        ) : (
+          <div style={{ marginTop: 8, padding: 8, border: '1px solid #eee', borderRadius: 6, background: '#fafafa', color: '#555', fontSize: 12 }}>
+            Initialization finished. Use the Run command menu for installs/builds.
+          </div>
+        )}
+        {skipInit ? (
+          <Flex style={{ marginTop: 8, gap: 8, justifyContent: 'flex-start' }}>
+            <FlexItem><Button variant="secondary" onClick={()=>window.api.openDirectory(sitePath)}>Open directory</Button></FlexItem>
             <FlexItem>
               <Button isBusy={starting} variant={running ? 'secondary' : 'primary'} onClick={toggleDevServer}>{running ? 'Stop dev server' : 'Start dev server'}</Button>
               {starting || serverUrl ? (
@@ -244,8 +303,8 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
             </FlexItem>
             <FlexItem><Button variant="secondary" onClick={openPatchModal}>Create patch</Button></FlexItem>
             <FlexItem><DropdownMenu icon={chevronDown} label="Run command" text="Run command" controls={[{title:'npm run build',onClick:()=>runScript('build')},{title:'npm run build:dev',onClick:()=>runScript('build:dev')},{title:'npm run dev',onClick:()=>runScript('dev')},{title:'npm run test',onClick:()=>runScript('test')},{title:'npm run watch',onClick:()=>runScript('watch')},{title:'npm run grunt',onClick:()=>runScript('grunt')},{title:'Kill running command',onClick:killCurrent}]}/></FlexItem>
-          </>):null}
-        </Flex>
+          </Flex>
+        ) : null}
         <div style={{ marginTop: 12 }}>
           <TabPanel className="log-tabs" activeClass="is-active" onSelect={(n)=>{setSelectedTab(n);setStick(true);}} tabs={[{name:'npm',title:'Npm logs'},{name:'server',title:'Server logs'},{name:'wp',title:'WordPress logs'},{name:'mail',title:'Mail'}]}>
             {(tab)=>(<div>

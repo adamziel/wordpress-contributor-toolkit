@@ -29,7 +29,6 @@ async function main() {
 			}
 		});
 
-		console.log(await result.playground.listFiles('/internal/shared/mu-plugins'));
 		const muPlugin = `<?php
 			function playground_wp_mail_smtp_init( $phpmailer ) {
 				$phpmailer->isSMTP();

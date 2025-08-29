@@ -2442,7 +2442,7 @@
           var HostPortal = 4;
           var HostComponent = 5;
           var HostText = 6;
-          var Fragment10 = 7;
+          var Fragment9 = 7;
           var Mode = 8;
           var ContextConsumer = 9;
           var ContextProvider = 10;
@@ -3599,7 +3599,7 @@
                 return "DehydratedFragment";
               case ForwardRef:
                 return getWrappedName$1(type, type.render, "ForwardRef");
-              case Fragment10:
+              case Fragment9:
                 return "Fragment";
               case HostComponent:
                 return type;
@@ -12028,7 +12028,7 @@
               }
             }
             function updateFragment2(returnFiber, current2, fragment, lanes, key) {
-              if (current2 === null || current2.tag !== Fragment10) {
+              if (current2 === null || current2.tag !== Fragment9) {
                 var created = createFiberFromFragment(fragment, returnFiber.mode, lanes, key);
                 created.return = returnFiber;
                 return created;
@@ -12431,7 +12431,7 @@
                 if (child.key === key) {
                   var elementType = element.type;
                   if (elementType === REACT_FRAGMENT_TYPE) {
-                    if (child.tag === Fragment10) {
+                    if (child.tag === Fragment9) {
                       deleteRemainingChildren(returnFiber, child.sibling);
                       var existing = useFiber(child, element.props.children);
                       existing.return = returnFiber;
@@ -17907,7 +17907,7 @@
                 var _resolvedProps2 = workInProgress2.elementType === type ? _unresolvedProps2 : resolveDefaultProps(type, _unresolvedProps2);
                 return updateForwardRef(current2, workInProgress2, type, _resolvedProps2, renderLanes2);
               }
-              case Fragment10:
+              case Fragment9:
                 return updateFragment(current2, workInProgress2, renderLanes2);
               case Mode:
                 return updateMode(current2, workInProgress2, renderLanes2);
@@ -18179,7 +18179,7 @@
               case SimpleMemoComponent:
               case FunctionComponent:
               case ForwardRef:
-              case Fragment10:
+              case Fragment9:
               case Mode:
               case Profiler:
               case ContextConsumer:
@@ -22440,7 +22440,7 @@
             return fiber;
           }
           function createFiberFromFragment(elements2, mode, lanes, key) {
-            var fiber = createFiber(Fragment10, elements2, key, mode);
+            var fiber = createFiber(Fragment9, elements2, key, mode);
             fiber.lanes = lanes;
             return fiber;
           }
@@ -24811,7 +24811,7 @@
           var ContextProvider = REACT_PROVIDER_TYPE;
           var Element2 = REACT_ELEMENT_TYPE;
           var ForwardRef = REACT_FORWARD_REF_TYPE;
-          var Fragment10 = REACT_FRAGMENT_TYPE;
+          var Fragment9 = REACT_FRAGMENT_TYPE;
           var Lazy = REACT_LAZY_TYPE;
           var Memo = REACT_MEMO_TYPE;
           var Portal3 = REACT_PORTAL_TYPE;
@@ -24870,7 +24870,7 @@
           exports.ContextProvider = ContextProvider;
           exports.Element = Element2;
           exports.ForwardRef = ForwardRef;
-          exports.Fragment = Fragment10;
+          exports.Fragment = Fragment9;
           exports.Lazy = Lazy;
           exports.Memo = Memo;
           exports.Portal = Portal3;
@@ -47119,7 +47119,7 @@ If there's a particular need for this, please submit a feature request at https:
           downloadPhase && /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { fontSize: 12, color: "#555", marginBottom: 6 }, children: downloadPhase }),
           /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { ref: termRef, style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 8, borderRadius: 6, height: 140, overflow: "auto" }, children: terminalMsgs })
         ] }) }),
-        sites.length > 0 ? sites.map((s) => /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(
+        sites.length > 0 ? sites.sort((a, b) => (siteMeta?.[b]?.createdAt || 0) - (siteMeta?.[a]?.createdAt || 0)).map((s) => /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(
           SiteRow,
           {
             sitePath: s,
@@ -47155,6 +47155,11 @@ If there's a particular need for this, please submit a feature request at https:
     const [isEmailOpen, setIsEmailOpen] = (0, import_react68.useState)(false);
     const [activeEmail, setActiveEmail] = (0, import_react68.useState)(null);
     const [emailViewTab, setEmailViewTab] = (0, import_react68.useState)("rendered");
+    const [building, setBuilding] = (0, import_react68.useState)(false);
+    const [hasNodeModules, setHasNodeModules] = (0, import_react68.useState)(false);
+    const [hasBuilt, setHasBuilt] = (0, import_react68.useState)(false);
+    const [skipInit, setSkipInit] = (0, import_react68.useState)(false);
+    const [statusLoading, setStatusLoading] = (0, import_react68.useState)(true);
     const npmRef = (0, import_react68.useRef)(null);
     const serverRef = (0, import_react68.useRef)(null);
     const wpRef = (0, import_react68.useRef)(null);
@@ -47185,6 +47190,21 @@ If there's a particular need for this, please submit a feature request at https:
       await window.api.clearEmails(sitePath);
       setEmails([]);
     }, [sitePath]);
+    const loadStatus = (0, import_react68.useCallback)(async () => {
+      try {
+        setStatusLoading(true);
+        const s = await window.api.getSiteStatus(sitePath);
+        setHasNodeModules(Boolean(s?.hasNodeModules));
+        setHasBuilt(Boolean(s?.hasBuilt));
+        setSkipInit(Boolean(s?.skipInitWizard));
+      } catch {
+      } finally {
+        setStatusLoading(false);
+      }
+    }, [sitePath]);
+    (0, import_react68.useEffect)(() => {
+      loadStatus();
+    }, [loadStatus]);
     const runInstall = () => {
       setInstalling(true);
       setSelectedTab("npm");
@@ -47195,23 +47215,44 @@ install exited with code ${code}
 `);
         setInstalling(false);
         if (1) {
-          await window.api.markSiteInitialized(sitePath);
+          try {
+            await window.api.markSiteInitialized(sitePath);
+          } catch {
+          }
           onInitialized(sitePath);
+        }
+        try {
+          await loadStatus();
+        } catch {
         }
       });
     };
     const runScript = (name) => {
       setSelectedTab("npm");
       setStick(true);
-      window.api.runNpmScript(sitePath, name, [], ({ data }) => appendNpm(data), ({ code }) => appendNpm(`
+      if (name === "build") setBuilding(true);
+      window.api.runNpmScript(sitePath, name, [], ({ data }) => appendNpm(data), async ({ code }) => {
+        appendNpm(`
 ${name} exited with code ${code}
-`));
+`);
+        if (name === "build") {
+          setBuilding(false);
+          try {
+            await loadStatus();
+          } catch {
+          }
+        }
+      });
     };
     const killCurrent = async () => {
       await window.api.npmKill({ directoryPath: sitePath });
     };
     const toggleServer = async () => {
       if (!running) {
+        if (!skipInit && !hasBuilt) {
+          alert("Please complete the first full build before starting the dev server. You can also skip the wizard.");
+          return;
+        }
         setStarting(true);
         setSelectedTab("server");
         setStick(true);
@@ -47297,21 +47338,73 @@ ${name} exited with code ${code}
         " ",
         sitePath
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(component_default3, { style: { marginTop: 8, gap: 8, justifyContent: "flex-start" }, children: [
-        !initialized ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { isBusy: installing, variant: "primary", onClick: runInstall, children: "Install dependencies" }) }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { variant: "secondary", onClick: () => window.api.openDirectory(sitePath), children: "Open directory" }) }),
-        1 ? /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(import_jsx_runtime54.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(component_default4, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { isBusy: starting, variant: running ? "secondary" : "primary", onClick: toggleDevServer, children: running ? "Stop dev server" : "Start dev server" }),
-            starting || serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("span", { style: { marginLeft: 8 }, children: starting ? "Starting..." : serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("a", { href: serverUrl, onClick: (e) => {
-              e.preventDefault();
-              window.api.openExternal(serverUrl);
-            }, children: serverUrl }) : null }) : null
+      !skipInit ? /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { style: { marginTop: 8, padding: 8, border: "1px solid #eee", borderRadius: 6, background: "#fafafa" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { marginBottom: 6, color: "#333" }, children: "First, install the dependencies, then run a full build. After that, start the dev server." }),
+        /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(
+            button_default,
+            {
+              isBusy: installing,
+              variant: hasNodeModules ? "secondary" : "primary",
+              onClick: runInstall,
+              disabled: installing || hasNodeModules,
+              children: hasNodeModules ? "Dependencies installed" : "Install dependencies"
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("span", { style: { color: "#999" }, children: "\u2192" }),
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(
+            button_default,
+            {
+              isBusy: building,
+              variant: hasBuilt ? "secondary" : "primary",
+              onClick: () => runScript("build"),
+              disabled: building || !hasNodeModules || hasBuilt,
+              children: hasBuilt ? "First build complete" : "First full build"
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("span", { style: { color: "#999" }, children: "\u2192" }),
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(
+            button_default,
+            {
+              isBusy: starting,
+              variant: running ? "secondary" : "primary",
+              onClick: async () => {
+                await window.api.setSkipInitWizard(sitePath, true);
+                setSkipInit(true);
+                toggleDevServer();
+              },
+              disabled: starting || !hasBuilt,
+              children: running ? "Stop dev server" : "Start dev server and finish the wizard"
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { marginLeft: "auto" }, children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { variant: "link", onClick: async () => {
+            await window.api.setSkipInitWizard(sitePath, true);
+            setSkipInit(true);
+          }, style: { textDecoration: "underline" }, children: "Skip initialization wizard" }) })
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { style: { marginTop: 6, fontSize: 12, color: "#555" }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("span", { children: [
+            "node_modules: ",
+            hasNodeModules ? "\u2713" : "\u2717"
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { variant: "secondary", onClick: openPatchModal, children: "Create patch" }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(dropdown_menu_default, { icon: chevron_down_default, label: "Run command", text: "Run command", controls: [{ title: "npm run build", onClick: () => runScript("build") }, { title: "npm run build:dev", onClick: () => runScript("build:dev") }, { title: "npm run dev", onClick: () => runScript("dev") }, { title: "npm run test", onClick: () => runScript("test") }, { title: "npm run watch", onClick: () => runScript("watch") }, { title: "npm run grunt", onClick: () => runScript("grunt") }, { title: "Kill running command", onClick: killCurrent }] }) })
-        ] }) : null
-      ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("span", { style: { marginLeft: 12 }, children: [
+            "dist present: ",
+            hasBuilt ? "\u2713" : "\u2717"
+          ] })
+        ] })
+      ] }) : /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { marginTop: 8, padding: 8, border: "1px solid #eee", borderRadius: 6, background: "#fafafa", color: "#555", fontSize: 12 }, children: "Initialization finished. Use the Run command menu for installs/builds." }),
+      skipInit ? /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(component_default3, { style: { marginTop: 8, gap: 8, justifyContent: "flex-start" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { variant: "secondary", onClick: () => window.api.openDirectory(sitePath), children: "Open directory" }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(component_default4, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { isBusy: starting, variant: running ? "secondary" : "primary", onClick: toggleDevServer, children: running ? "Stop dev server" : "Start dev server" }),
+          starting || serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("span", { style: { marginLeft: 8 }, children: starting ? "Starting..." : serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("a", { href: serverUrl, onClick: (e) => {
+            e.preventDefault();
+            window.api.openExternal(serverUrl);
+          }, children: serverUrl }) : null }) : null
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { variant: "secondary", onClick: openPatchModal, children: "Create patch" }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(dropdown_menu_default, { icon: chevron_down_default, label: "Run command", text: "Run command", controls: [{ title: "npm run build", onClick: () => runScript("build") }, { title: "npm run build:dev", onClick: () => runScript("build:dev") }, { title: "npm run dev", onClick: () => runScript("dev") }, { title: "npm run test", onClick: () => runScript("test") }, { title: "npm run watch", onClick: () => runScript("watch") }, { title: "npm run grunt", onClick: () => runScript("grunt") }, { title: "Kill running command", onClick: killCurrent }] }) })
+      ] }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { marginTop: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(tab_panel_default, { className: "log-tabs", activeClass: "is-active", onSelect: (n) => {
         setSelectedTab(n);
         setStick(true);
