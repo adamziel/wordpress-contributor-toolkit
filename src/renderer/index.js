@@ -47485,7 +47485,19 @@ ${name} exited with code ${code}
           starting || serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("span", { style: { marginLeft: 8 }, children: starting ? "Starting..." : serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("a", { href: serverUrl, onClick: (e) => {
             e.preventDefault();
             window.api.openExternal(serverUrl);
-          }, children: serverUrl }) : null }) : null
+          }, children: serverUrl }) : null }) : null,
+          running && serverUrl ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(
+            button_default,
+            {
+              variant: "secondary",
+              onClick: () => {
+                const adminer = (serverUrl || "").replace(/\/$/, "/") + "adminer.php";
+                window.api.openExternal(adminer);
+              },
+              style: { marginLeft: 8 },
+              children: "Open Adminer"
+            }
+          ) : null
         ] }),
         /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { variant: "secondary", onClick: openPatchModal, children: "Create patch" }) }),
         /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default4, { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(dropdown_menu_default, { icon: chevron_down_default, label: "Run command", text: "Run command", controls: [{ title: "npm run build", onClick: () => runScript("build") }, { title: "npm run build:dev", onClick: () => runScript("build:dev") }, { title: "npm run dev", onClick: () => runScript("dev") }, { title: "npm run test", onClick: () => runScript("test") }, { title: "npm run watch", onClick: () => runScript("watch") }, { title: "npm run grunt", onClick: () => runScript("grunt") }, { title: "Kill running command", onClick: killCurrent }] }) })
