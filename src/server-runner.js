@@ -46,15 +46,11 @@ async function main() {
 				}
 			}
 			add_action( 'phpmailer_init', 'playground_wp_mail_smtp_init', 0);
-
-			function playground_wp_mail_smtp_test() {
-				wp_mail( 'adam@adamziel.com', 'Test Email', 'This is a test email from WordPress Playground.' );
-			}
-			add_action( 'wp_head', 'playground_wp_mail_smtp_test', 0 );
 		`;
 		await result.playground.run({
 			code: `<?php
-			file_put_contents('/internal/shared/mu-plugins/2-wp-mail-smtp.php', getenv('MU_PLUGIN'));
+			// @TODO: Why won't .writeFile() work here? It complains about file permissions.
+			file_put_contents('/internal/shared/mu-plugins/wp-mail-smtp.php', getenv('MU_PLUGIN'));
 			`,
 			env: {
 				MU_PLUGIN: muPlugin
