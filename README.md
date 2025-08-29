@@ -51,13 +51,19 @@ https://github.com/user-attachments/assets/59ef930b-cbe1-4aee-879e-21dcf9999d0c
 
 1) Download the latest packaged build for your platform from the [workflows page](https://github.com/adamziel/wordpress-contributor-toolkit/actions/workflows/build.yml).
 2) Open the app
-3) Click "Create WordPress Core site" and choose a destination folder for your site.
-4) Click "Install dependencies"
-5) Click "Run command > npm run build"
-6) Click "Start dev server"
-7) A browser window should open automatically. If not, you can manually open it by clicking "Launch site".
-8) Make changes in the code
-9) Click "Generate patch" to create a diff of your changes.
+3) If on mac, sign it and remove it from the quarantine – the app is not officially signed at this point.
+    ```
+    ❯ security find-identity -p codesigning
+    ❯ codesign --deep --force --verify --verbose --sign "selfsigned" electron-setup-wordpress-core.app
+    ❯ xattr -d com.apple.quarantine electron-setup-wordpress-core.app
+    ```
+5) Click "Create WordPress Core site" and choose a destination folder for your site.
+6) Click "Install dependencies"
+7) Click "Run command > npm run build"
+8) Click "Start dev server"
+9) A browser window should open automatically. If not, you can manually open it by clicking "Launch site".
+10) Make changes in the code
+11) Click "Generate patch" to create a diff of your changes.
 
 ### Build from source
 
