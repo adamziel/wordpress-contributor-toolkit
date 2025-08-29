@@ -103,6 +103,35 @@ contextBridge.exposeInMainWorld('api', {
 	stopServer: async (sitePath) => {
 		return await ipcRenderer.invoke('playground:stop', sitePath);
 	}
+,
+	// SMTP bridge
+	getEmails: async (sitePath) => {
+		return await ipcRenderer.invoke('smtp:get', sitePath);
+	}
+,
+	clearEmails: async (sitePath) => {
+		return await ipcRenderer.invoke('smtp:clear', sitePath);
+	}
+,
+	startSmtp: async (sitePath) => {
+		return await ipcRenderer.invoke('smtp:start', sitePath);
+	}
+,
+	stopSmtp: async (sitePath) => {
+		return await ipcRenderer.invoke('smtp:stop', sitePath);
+	}
+,
+	onNewEmail: (sitePath, handler) => {
+		const h = (_e, payload) => { if (payload.sitePath === sitePath) handler && handler(payload.message); };
+		ipcRenderer.on('smtp:new-email', h);
+		return () => ipcRenderer.removeListener('smtp:new-email', h);
+	}
+,
+	onSmtpStarted: (sitePath, handler) => {
+		const h = (_e, payload) => { if (payload.sitePath === sitePath) handler && handler(payload.port); };
+		ipcRenderer.on('smtp:started', h);
+		return () => ipcRenderer.removeListener('smtp:started', h);
+	}
 });
 
 

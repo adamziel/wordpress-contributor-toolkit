@@ -132,6 +132,13 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
   const [wpLogs, setWpLogs] = useState('');
   const [isPatchOpen, setIsPatchOpen] = useState(false);
   const [patchText, setPatchText] = useState('');
+  const [emails, setEmails] = useState([]);
+  const [smtpPort, setSmtpPort] = useState(0);
+  const newEmailUnsubRef = useRef(null);
+  const smtpStartedUnsubRef = useRef(null);
+  const [isEmailOpen, setIsEmailOpen] = useState(false);
+  const [activeEmail, setActiveEmail] = useState(null);
+  const [emailViewTab, setEmailViewTab] = useState('rendered');
 
   // sticky refs
   const npmRef = useRef(null); const serverRef = useRef(null); const wpRef = useRef(null);
@@ -143,6 +150,9 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
   const createdLabel = createdAt ? new Date(createdAt).toLocaleString() : '';
 
   const appendNpm = (s)=>setNpmLogs(v=>v+s); const appendServer=(s)=>setServerLogs(v=>v+s); const appendWp=(s)=>setWpLogs(v=>v+s);
+  const sortEmails = useCallback((list)=>[...list].sort((a,b)=>new Date(b.sentAt||b.date||0)-new Date(a.sentAt||a.date||0)),[]);
+  const openEmail = useCallback((m)=>{ setActiveEmail(m); setEmailViewTab('rendered'); setIsEmailOpen(true); },[]);
+  const clearEmails = useCallback(async ()=>{ await window.api.clearEmails(sitePath); setEmails([]); }, [sitePath]);
 
   const runInstall = () => {
     setInstalling(true); setSelectedTab('npm'); setStick(true); window.api.runNpmInstall(sitePath, ({ data }) => appendNpm(data), async ({ code }) => {
@@ -172,7 +182,24 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
   };
   const runScript = (name)=>{ setSelectedTab('npm'); setStick(true); window.api.runNpmScript(sitePath,name,[],({data})=>appendNpm(data),({code})=>appendNpm(`\n${name} exited with code ${code}\n`)); };
   const killCurrent = async ()=>{ await window.api.npmKill({ directoryPath: sitePath }); };
-  const toggleServer = async ()=>{ if(!running){ setStarting(true); setSelectedTab('server'); setStick(true); await window.api.startServer(sitePath, (p)=>appendServer(p.data), (url)=>{ const u=url.replace(/\/$/,'/'); setServerUrl(u); window.api.openExternal(u); setRunning(true); setStarting(false); }, ()=>{ setRunning(false); setServerUrl(''); }); window.api.startWpDebug(sitePath,(d)=>appendWp(d)); } else { await window.api.stopServer(sitePath); window.api.stopWpDebug(sitePath); await window.api.npmKill({ directoryPath: sitePath }); } };
+  const toggleServer = async ()=>{
+    if(!running){
+      setStarting(true); setSelectedTab('server'); setStick(true);
+      // Subscribe to SMTP events before starting to avoid missing early events
+      if (!smtpStartedUnsubRef.current) smtpStartedUnsubRef.current = window.api.onSmtpStarted(sitePath, (port)=>setSmtpPort(port||0));
+      if (!newEmailUnsubRef.current) newEmailUnsubRef.current = window.api.onNewEmail(sitePath, (msg)=>setEmails((prev)=>sortEmails([msg, ...prev])));
+      await window.api.startServer(sitePath, (p)=>appendServer(p.data), (url)=>{ const u=url.replace(/\/$/,'/'); setServerUrl(u); window.api.openExternal(u); setRunning(true); setStarting(false); }, ()=>{ setRunning(false); setServerUrl(''); });
+      window.api.startWpDebug(sitePath,(d)=>appendWp(d));
+      try { const { port, emails } = await window.api.getEmails(sitePath); if (port) setSmtpPort(port); setEmails(emails||[]); } catch {}
+    } else {
+      await window.api.stopServer(sitePath);
+      window.api.stopWpDebug(sitePath);
+      await window.api.npmKill({ directoryPath: sitePath });
+      try { if (newEmailUnsubRef.current) { newEmailUnsubRef.current(); newEmailUnsubRef.current=null; } } catch {}
+      try { if (smtpStartedUnsubRef.current) { smtpStartedUnsubRef.current(); smtpStartedUnsubRef.current=null; } } catch {}
+      setSmtpPort(0);
+    }
+  };
   const toggleDevServer = async ()=>{ if(!running){ runScript('dev'); } await toggleServer(); };
   const confirmAnd = async (m,a)=>{ if(window.confirm(m)) await a(); };
 
@@ -220,11 +247,36 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
           </>):null}
         </Flex>
         <div style={{ marginTop: 12 }}>
-          <TabPanel className="log-tabs" activeClass="is-active" onSelect={(n)=>{setSelectedTab(n);setStick(true);}} tabs={[{name:'npm',title:'Npm logs'},{name:'server',title:'Server logs'},{name:'wp',title:'WordPress logs'}]}>
+          <TabPanel className="log-tabs" activeClass="is-active" onSelect={(n)=>{setSelectedTab(n);setStick(true);}} tabs={[{name:'npm',title:'Npm logs'},{name:'server',title:'Server logs'},{name:'wp',title:'WordPress logs'},{name:'mail',title:'Mail'}]}>
             {(tab)=>(<div>
               {tab.name==='npm' && (<div ref={npmRef} onScroll={makeOnScroll('npm')} style={{ whiteSpace:'pre-wrap', background:'#111', color:'#eee', padding:12, borderRadius:6, height:180, overflow:'auto' }}>{npmLogs}</div>)}
               {tab.name==='server' && (<div ref={serverRef} onScroll={makeOnScroll('server')} style={{ whiteSpace:'pre-wrap', background:'#111', color:'#eee', padding:12, borderRadius:6, height:180, overflow:'auto' }}>{serverLogs}</div>)}
               {tab.name==='wp' && (<div ref={wpRef} onScroll={makeOnScroll('wp')} style={{ whiteSpace:'pre-wrap', background:'#111', color:'#eee', padding:12, borderRadius:6, height:180, overflow:'auto' }}>{wpLogs}</div>)}
+              {tab.name==='mail' && (
+                <div>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+                    <div style={{ fontSize:12, color:'#666' }}>{smtpPort ? `SMTP listening on 127.0.0.1:${smtpPort}` : 'SMTP will start with the dev server.'}</div>
+                    <div><Button size="small" variant="secondary" onClick={clearEmails}>Clear emails</Button></div>
+                  </div>
+                  <div style={{ border:'1px solid #ddd', borderRadius:6, maxHeight:220, overflow:'auto' }}>
+                    {emails && emails.length ? emails.map((m)=>{
+                      const when = m.sentAt || m.date; const whenStr = when ? new Date(when).toLocaleString() : '';
+                      return (
+                        <div key={m.id}
+                          onClick={()=>openEmail(m)}
+                          style={{ padding:'8px 10px', cursor:'pointer', borderBottom:'1px solid #eee', display:'flex', gap:8 }}
+                        >
+                          <div style={{ flex:'0 0 180px', color:'#555', fontSize:12 }}>{whenStr}</div>
+                          <div style={{ flex:'0 0 220px', color:'#333', fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.from || ''}</div>
+                          <div style={{ flex:'1 1 auto', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.subject || '(no subject)'}</div>
+                        </div>
+                      );
+                    }) : (
+                      <div style={{ padding:12, color:'#666' }}>No emails yet.</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>)}
           </TabPanel>
         </div>
@@ -248,6 +300,36 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
               <pre style={{ margin:0, whiteSpace:'pre-wrap', background:'#111', color:'#eee', padding:12, borderRadius:6, height:'100%', overflow:'auto' }}>
                 {patchText && patchText.trim().length ? patchText : 'No changes.'}
               </pre>
+            </div>
+          </Modal>
+        )}
+        {isEmailOpen && activeEmail && (
+          <Modal
+            title={activeEmail.subject || 'Email'}
+            onRequestClose={()=>{ setIsEmailOpen(false); setActiveEmail(null); }}
+            shouldCloseOnClickOutside
+            isFullScreen
+          >
+            <div style={{ padding: 8 }}>
+              <div style={{ marginBottom: 8, fontSize:12, color:'#444' }}>
+                <div><strong>From:</strong> {activeEmail.from || ''}</div>
+                <div><strong>To:</strong> {activeEmail.to || ''}</div>
+                {activeEmail.cc ? (<div><strong>CC:</strong> {activeEmail.cc}</div>) : null}
+                <div><strong>Date:</strong> {activeEmail.sentAt ? new Date(activeEmail.sentAt).toLocaleString() : (activeEmail.date ? new Date(activeEmail.date).toLocaleString() : '')}</div>
+              </div>
+              <TabPanel className="email-tabs" activeClass="is-active" onSelect={(n)=>setEmailViewTab(n)} tabs={[{name:'rendered',title:'Rendered'},{name:'raw',title:'Raw'}]}>
+                {(tab)=> tab.name==='rendered' ? (
+                  <div style={{ border:'1px solid #ddd', borderRadius:6, padding:12, minHeight:'60vh', background:'#fff' }}>
+                    {activeEmail.html ? (
+                      <div dangerouslySetInnerHTML={{ __html: String(activeEmail.html) }} />
+                    ) : (
+                      <pre style={{ whiteSpace:'pre-wrap', margin:0 }}>{activeEmail.text || ''}</pre>
+                    )}
+                  </div>
+                ) : (
+                  <pre style={{ whiteSpace:'pre-wrap', margin:0, background:'#111', color:'#eee', padding:12, borderRadius:6, minHeight:'60vh', overflow:'auto' }}>{activeEmail.raw || activeEmail.text || ''}</pre>
+                )}
+              </TabPanel>
             </div>
           </Modal>
         )}

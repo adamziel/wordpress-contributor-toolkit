@@ -9,6 +9,8 @@ const git = require('isomorphic-git');
 const http = require('isomorphic-git/http/node');
 const JsDiff = require('diff');
 const { spawn } = require('child_process');
+const { SMTPServer } = require('smtp-server');
+const { simpleParser } = require('mailparser');
 
 const WORDPRESS_ZIP_URL = 'https://github.com/WordPress/wordpress-develop/archive/refs/heads/trunk.zip';
 const WORDPRESS_GIT_URL = 'https://github.com/WordPress/wordpress-develop.git';
@@ -82,6 +84,118 @@ const runIdByDirectory = {};
 const playgroundServers = {};
 /** @type {Record<string, { filePath: string, fileWatcher?: import('fs').FSWatcher, dirWatcher?: import('fs').FSWatcher, lastSize: number }>} */
 const wpDebugWatchers = {};
+/** @type {Record<string, { server: import('smtp-server').SMTPServer, port: number }>} */
+const smtpServers = {};
+
+function smtpStoreKey(sitePath) {
+    return `siteMail:${sitePath}`;
+}
+
+async function getSiteEmails(sitePath) {
+    const s = await getStore();
+    const list = s.get(smtpStoreKey(sitePath));
+    return Array.isArray(list) ? list : [];
+}
+
+async function saveSiteEmails(sitePath, emails) {
+    const s = await getStore();
+    s.set(smtpStoreKey(sitePath), emails);
+}
+
+async function appendSiteEmail(sitePath, email) {
+    const emails = await getSiteEmails(sitePath);
+    emails.push(email);
+    // Keep most-recent first by sentAt
+    emails.sort((a, b) => new Date(b.sentAt || b.date || 0) - new Date(a.sentAt || a.date || 0));
+    await saveSiteEmails(sitePath, emails);
+}
+
+function broadcastToAll(eventName, payload) {
+    for (const win of BrowserWindow.getAllWindows()) {
+        try { win.webContents.send(eventName, payload); } catch {}
+    }
+}
+
+async function ensureSmtpServerForSite(sitePath) {
+    if (smtpServers[sitePath]?.server) return smtpServers[sitePath];
+
+    const server = new SMTPServer({
+        disabledCommands: ['AUTH'],
+        logger: false,
+        onData(stream, session, callback) {
+            const chunks = [];
+            stream.on('data', (d) => chunks.push(Buffer.from(d)));
+            stream.on('end', async () => {
+                const raw = Buffer.concat(chunks);
+                try {
+                    const parsed = await simpleParser(raw);
+                    const sentAtIso = (parsed.date ? new Date(parsed.date) : new Date()).toISOString();
+                    const msg = {
+                        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                        subject: parsed.subject || '',
+                        from: parsed.from ? parsed.from.text : '',
+                        to: parsed.to ? parsed.to.text : '',
+                        cc: parsed.cc ? parsed.cc.text : '',
+                        bcc: parsed.bcc ? parsed.bcc.text : '',
+                        date: parsed.date ? new Date(parsed.date).toISOString() : undefined,
+                        sentAt: sentAtIso,
+                        text: parsed.text || '',
+                        html: parsed.html || '',
+                        headers: (() => {
+                            const obj = {};
+                            try { for (const [k, v] of parsed.headers) obj[k] = String(v); } catch {}
+                            return obj;
+                        })(),
+                        raw: raw.toString('utf8')
+                    };
+                    await appendSiteEmail(sitePath, msg);
+                    broadcastToAll('smtp:new-email', { sitePath, message: msg });
+                } catch (e) {
+                    // parsing failed, store raw minimal
+                    const msg = {
+                        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                        subject: '',
+                        from: '',
+                        to: '',
+                        sentAt: new Date().toISOString(),
+                        text: raw.toString('utf8'),
+                        html: '',
+                        headers: {},
+                        raw: raw.toString('utf8')
+                    };
+                    await appendSiteEmail(sitePath, msg);
+                    broadcastToAll('smtp:new-email', { sitePath, message: msg });
+                }
+                callback(null);
+            });
+        }
+    });
+
+    await new Promise((resolve, reject) => {
+        try {
+            server.listen(0, '127.0.0.1', resolve);
+        } catch (e) { reject(e); }
+    });
+
+    const address = server.server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    smtpServers[sitePath] = { server, port };
+
+    const s = await getStore();
+    const meta = s.get('siteMeta') || {};
+    meta[sitePath] = { ...(meta[sitePath] || {}), smtpPort: port };
+    s.set('siteMeta', meta);
+
+    broadcastToAll('smtp:started', { sitePath, port });
+    return smtpServers[sitePath];
+}
+
+async function stopSmtpServerForSite(sitePath) {
+    const srv = smtpServers[sitePath];
+    if (!srv) return;
+    try { srv.server.close(); } catch {}
+    delete smtpServers[sitePath];
+}
 
 function createWindow() {
 	const mainWindow = new BrowserWindow({
@@ -395,6 +509,8 @@ ipcMain.handle('npm:kill', async (_event, { runId, directoryPath }) => {
 });
 
 ipcMain.handle('playground:start', async (event, sitePath) => {
+	// Ensure a per-site SMTP server is running alongside the dev server
+	ensureSmtpServerForSite(sitePath).catch(() => {});
 	const buildDir = path.join(sitePath, 'build');
 	if (playgroundServers[sitePath]?.child) {
 		return { ok: true, url: playgroundServers[sitePath].url };
@@ -442,6 +558,8 @@ ipcMain.handle('playground:start', async (event, sitePath) => {
 		event.sender.send('playground:stopped', { sitePath, code });
 		// Stop WP debug tail if running
 		stopWpDebugTail(sitePath);
+		// Stop SMTP server
+		stopSmtpServerForSite(sitePath);
 	});
 
 	return new Promise((resolve) => {
@@ -460,10 +578,46 @@ ipcMain.handle('playground:stop', async (_event, sitePath) => {
 	if (!server?.child) return { ok: true };
 	try {
 		server.child.kill();
+		await stopSmtpServerForSite(sitePath);
 		return { ok: true };
 	} catch (e) {
 		return { ok: false, error: String(e) };
 	}
+});
+
+// --- SMTP IPC ---
+ipcMain.handle('smtp:get', async (_e, sitePath) => {
+    const emails = await getSiteEmails(sitePath);
+    const srv = smtpServers[sitePath];
+    const s = await getStore();
+    const meta = s.get('siteMeta') || {};
+    const port = srv?.port || meta?.[sitePath]?.smtpPort || 0;
+    // Return sorted by sentAt desc
+    const sorted = [...emails].sort((a, b) => new Date(b.sentAt || b.date || 0) - new Date(a.sentAt || a.date || 0));
+    return { port, emails: sorted };
+});
+
+ipcMain.handle('smtp:clear', async (_e, sitePath) => {
+    await saveSiteEmails(sitePath, []);
+    return true;
+});
+
+ipcMain.handle('smtp:start', async (_e, sitePath) => {
+    try {
+        const { port } = await ensureSmtpServerForSite(sitePath);
+        return { ok: true, port };
+    } catch (e) {
+        return { ok: false, error: String(e) };
+    }
+});
+
+ipcMain.handle('smtp:stop', async (_e, sitePath) => {
+    try {
+        await stopSmtpServerForSite(sitePath);
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, error: String(e) };
+    }
 });
 
 // --- WordPress debug.log tailing ---

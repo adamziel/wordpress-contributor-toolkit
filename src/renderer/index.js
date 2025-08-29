@@ -47148,6 +47148,13 @@ If there's a particular need for this, please submit a feature request at https:
     const [wpLogs, setWpLogs] = (0, import_react68.useState)("");
     const [isPatchOpen, setIsPatchOpen] = (0, import_react68.useState)(false);
     const [patchText, setPatchText] = (0, import_react68.useState)("");
+    const [emails, setEmails] = (0, import_react68.useState)([]);
+    const [smtpPort, setSmtpPort] = (0, import_react68.useState)(0);
+    const newEmailUnsubRef = (0, import_react68.useRef)(null);
+    const smtpStartedUnsubRef = (0, import_react68.useRef)(null);
+    const [isEmailOpen, setIsEmailOpen] = (0, import_react68.useState)(false);
+    const [activeEmail, setActiveEmail] = (0, import_react68.useState)(null);
+    const [emailViewTab, setEmailViewTab] = (0, import_react68.useState)("rendered");
     const npmRef = (0, import_react68.useRef)(null);
     const serverRef = (0, import_react68.useRef)(null);
     const wpRef = (0, import_react68.useRef)(null);
@@ -47168,6 +47175,16 @@ If there's a particular need for this, please submit a feature request at https:
     const appendNpm = (s) => setNpmLogs((v) => v + s);
     const appendServer = (s) => setServerLogs((v) => v + s);
     const appendWp = (s) => setWpLogs((v) => v + s);
+    const sortEmails = (0, import_react68.useCallback)((list) => [...list].sort((a, b) => new Date(b.sentAt || b.date || 0) - new Date(a.sentAt || a.date || 0)), []);
+    const openEmail = (0, import_react68.useCallback)((m) => {
+      setActiveEmail(m);
+      setEmailViewTab("rendered");
+      setIsEmailOpen(true);
+    }, []);
+    const clearEmails = (0, import_react68.useCallback)(async () => {
+      await window.api.clearEmails(sitePath);
+      setEmails([]);
+    }, [sitePath]);
     const runInstall = () => {
       setInstalling(true);
       setSelectedTab("npm");
@@ -47198,6 +47215,8 @@ ${name} exited with code ${code}
         setStarting(true);
         setSelectedTab("server");
         setStick(true);
+        if (!smtpStartedUnsubRef.current) smtpStartedUnsubRef.current = window.api.onSmtpStarted(sitePath, (port) => setSmtpPort(port || 0));
+        if (!newEmailUnsubRef.current) newEmailUnsubRef.current = window.api.onNewEmail(sitePath, (msg) => setEmails((prev2) => sortEmails([msg, ...prev2])));
         await window.api.startServer(sitePath, (p) => appendServer(p.data), (url) => {
           const u = url.replace(/\/$/, "/");
           setServerUrl(u);
@@ -47209,10 +47228,31 @@ ${name} exited with code ${code}
           setServerUrl("");
         });
         window.api.startWpDebug(sitePath, (d) => appendWp(d));
+        try {
+          const { port, emails: emails2 } = await window.api.getEmails(sitePath);
+          if (port) setSmtpPort(port);
+          setEmails(emails2 || []);
+        } catch {
+        }
       } else {
         await window.api.stopServer(sitePath);
         window.api.stopWpDebug(sitePath);
         await window.api.npmKill({ directoryPath: sitePath });
+        try {
+          if (newEmailUnsubRef.current) {
+            newEmailUnsubRef.current();
+            newEmailUnsubRef.current = null;
+          }
+        } catch {
+        }
+        try {
+          if (smtpStartedUnsubRef.current) {
+            smtpStartedUnsubRef.current();
+            smtpStartedUnsubRef.current = null;
+          }
+        } catch {
+        }
+        setSmtpPort(0);
       }
     };
     const toggleDevServer = async () => {
@@ -47275,10 +47315,33 @@ ${name} exited with code ${code}
       /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { marginTop: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(tab_panel_default, { className: "log-tabs", activeClass: "is-active", onSelect: (n) => {
         setSelectedTab(n);
         setStick(true);
-      }, tabs: [{ name: "npm", title: "Npm logs" }, { name: "server", title: "Server logs" }, { name: "wp", title: "WordPress logs" }], children: (tab) => /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { children: [
+      }, tabs: [{ name: "npm", title: "Npm logs" }, { name: "server", title: "Server logs" }, { name: "wp", title: "WordPress logs" }, { name: "mail", title: "Mail" }], children: (tab) => /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { children: [
         tab.name === "npm" && /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { ref: npmRef, onScroll: makeOnScroll("npm"), style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: npmLogs }),
         tab.name === "server" && /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { ref: serverRef, onScroll: makeOnScroll("server"), style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: serverLogs }),
-        tab.name === "wp" && /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { ref: wpRef, onScroll: makeOnScroll("wp"), style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: wpLogs })
+        tab.name === "wp" && /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { ref: wpRef, onScroll: makeOnScroll("wp"), style: { whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: 180, overflow: "auto" }, children: wpLogs }),
+        tab.name === "mail" && /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { fontSize: 12, color: "#666" }, children: smtpPort ? `SMTP listening on 127.0.0.1:${smtpPort}` : "SMTP will start with the dev server." }),
+            /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { children: /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { size: "small", variant: "secondary", onClick: clearEmails, children: "Clear emails" }) })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { border: "1px solid #ddd", borderRadius: 6, maxHeight: 220, overflow: "auto" }, children: emails && emails.length ? emails.map((m) => {
+            const when = m.sentAt || m.date;
+            const whenStr = when ? new Date(when).toLocaleString() : "";
+            return /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(
+              "div",
+              {
+                onClick: () => openEmail(m),
+                style: { padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid #eee", display: "flex", gap: 8 },
+                children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { flex: "0 0 180px", color: "#555", fontSize: 12 }, children: whenStr }),
+                  /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { flex: "0 0 220px", color: "#333", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: m.from || "" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { flex: "1 1 auto", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: m.subject || "(no subject)" })
+                ]
+              },
+              m.id
+            );
+          }) : /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { padding: 12, color: "#666" }, children: "No emails yet." }) })
+        ] })
       ] }) }) }),
       isPatchOpen && /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(
         modal_default,
@@ -47307,6 +47370,43 @@ ${name} exited with code ${code}
               }
             ),
             /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("pre", { style: { margin: 0, whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 12, borderRadius: 6, height: "100%", overflow: "auto" }, children: patchText && patchText.trim().length ? patchText : "No changes." })
+          ] })
+        }
+      ),
+      isEmailOpen && activeEmail && /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(
+        modal_default,
+        {
+          title: activeEmail.subject || "Email",
+          onRequestClose: () => {
+            setIsEmailOpen(false);
+            setActiveEmail(null);
+          },
+          shouldCloseOnClickOutside: true,
+          isFullScreen: true,
+          children: /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { style: { padding: 8 }, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { style: { marginBottom: 8, fontSize: 12, color: "#444" }, children: [
+              /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("strong", { children: "From:" }),
+                " ",
+                activeEmail.from || ""
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("strong", { children: "To:" }),
+                " ",
+                activeEmail.to || ""
+              ] }),
+              activeEmail.cc ? /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("strong", { children: "CC:" }),
+                " ",
+                activeEmail.cc
+              ] }) : null,
+              /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("strong", { children: "Date:" }),
+                " ",
+                activeEmail.sentAt ? new Date(activeEmail.sentAt).toLocaleString() : activeEmail.date ? new Date(activeEmail.date).toLocaleString() : ""
+              ] })
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(tab_panel_default, { className: "email-tabs", activeClass: "is-active", onSelect: (n) => setEmailViewTab(n), tabs: [{ name: "rendered", title: "Rendered" }, { name: "raw", title: "Raw" }], children: (tab) => tab.name === "rendered" ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { border: "1px solid #ddd", borderRadius: 6, padding: 12, minHeight: "60vh", background: "#fff" }, children: activeEmail.html ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { dangerouslySetInnerHTML: { __html: String(activeEmail.html) } }) : /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("pre", { style: { whiteSpace: "pre-wrap", margin: 0 }, children: activeEmail.text || "" }) }) : /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("pre", { style: { whiteSpace: "pre-wrap", margin: 0, background: "#111", color: "#eee", padding: 12, borderRadius: 6, minHeight: "60vh", overflow: "auto" }, children: activeEmail.raw || activeEmail.text || "" }) })
           ] })
         }
       )
