@@ -48,15 +48,7 @@ async function main() {
 			}
 			add_action( 'phpmailer_init', 'playground_wp_mail_smtp_init', 0);
 		`;
-		await result.playground.run({
-			code: `<?php
-			// @TODO: Why won't .writeFile() work here? It complains about file permissions.
-			file_put_contents('/internal/shared/mu-plugins/wp-mail-smtp.php', getenv('MU_PLUGIN'));
-			`,
-			env: {
-				MU_PLUGIN: muPlugin
-			}
-		});
+		await result.playground.writeFile('/internal/shared/mu-plugins/wp-mail-smtp.php', muPlugin);
 
 		// Use bundled Adminer PHP from src/adminer.php
 		try {
@@ -103,9 +95,6 @@ async function main() {
 				require __DIR__ . '/adminer-core.php';
 				`,
 				'adminer-core.php': fs.readFileSync(path.join(__dirname, 'adminer.php')),//.replaceAll(`login($We,$F){if($F=="")return`, `login($We,$F){`),
-				// 'adminer-plugins': {
-				// 	'login-password-less.php': fs.readFileSync(path.join(__dirname, 'adminer-plugins', 'login-password-less.php'), 'utf8'),
-				// }
 			});
 		} catch (e) {
 			console.error('[Adminer] load failed:', e && e.stack ? e.stack : String(e));
