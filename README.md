@@ -51,7 +51,7 @@ https://github.com/user-attachments/assets/59ef930b-cbe1-4aee-879e-21dcf9999d0c
 
 1) Download the latest packaged build for your platform from the [workflows page](https://github.com/adamziel/wordpress-contributor-toolkit/actions/workflows/build.yml).
 2) Open the app
-3) If on mac, sign it and remove it from the quarantine – the app is not officially signed at this point.
+3) If on mac, sign it and remove it from the quarantine – the app is not officially signed at this point. First, make sure you have a code signing identity: [apple guide](https://support.apple.com/guide/keychain-access/create-self-signed-certificates-kyca8916/mac), [StackOverflow thread](https://stackoverflow.com/questions/27474751/how-can-i-codesign-an-app-without-being-in-the-mac-developer-program). Then, follow these steps with the downloaded .app file:
     ```
     ❯ security find-identity -p codesigning
     ❯ codesign --deep --force --verify --verbose --sign "selfsigned" electron-setup-wordpress-core.app
