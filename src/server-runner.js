@@ -16,9 +16,50 @@ async function main() {
 			// Mount the build directory before install as /wordpress to use existing build
 			'mount-before-install': [ { hostPath: absBuild, vfsPath: '/wordpress' } ],
 			skipWordPressSetup: true,
-			verbosity: 'debug'
+			verbosity: 'debug',
+			blueprint: {
+				constants: {
+					'WP_MAIL_SMTP_HOST': process.env.WP_MAIL_SMTP_HOST || '127.0.0.1',
+					'WP_MAIL_SMTP_PORT': Number(process.env.WP_MAIL_SMTP_PORT || 25),
+					'WP_MAIL_SMTP_AUTH': String(process.env.WP_MAIL_SMTP_AUTH || 'false') === 'true',
+					'WP_MAIL_SMTP_SECURE': process.env.WP_MAIL_SMTP_SECURE || '', // '', 'ssl', or 'tls'
+					'WP_MAIL_SMTP_USER': process.env.WP_MAIL_SMTP_USER || '',
+					'WP_MAIL_SMTP_PASS': process.env.WP_MAIL_SMTP_PASS || ''
+				}
+			}
 		});
 
+		console.log(await result.playground.listFiles('/internal/shared/mu-plugins'));
+		const muPlugin = `<?php
+			function playground_wp_mail_smtp_init( $phpmailer ) {
+				$phpmailer->isSMTP();
+				$phpmailer->Host       = WP_MAIL_SMTP_HOST;
+				$phpmailer->Port       = WP_MAIL_SMTP_PORT;
+				$phpmailer->SMTPAuth   = WP_MAIL_SMTP_AUTH;
+				$phpmailer->SMTPSecure = WP_MAIL_SMTP_SECURE;
+				// Prevent PHPMailer from attempting opportunistic TLS when our SMTP doesn't advertise STARTTLS
+				$phpmailer->SMTPAutoTLS = false;
+
+				if ( WP_MAIL_SMTP_AUTH ) {
+					$phpmailer->Username = WP_MAIL_SMTP_USER;
+					$phpmailer->Password = WP_MAIL_SMTP_PASS;
+				}
+			}
+			add_action( 'phpmailer_init', 'playground_wp_mail_smtp_init', 0);
+
+			function playground_wp_mail_smtp_test() {
+				wp_mail( 'adam@adamziel.com', 'Test Email', 'This is a test email from WordPress Playground.' );
+			}
+			add_action( 'wp_head', 'playground_wp_mail_smtp_test', 0 );
+		`;
+		await result.playground.run({
+			code: `<?php
+			file_put_contents('/internal/shared/mu-plugins/2-wp-mail-smtp.php', getenv('MU_PLUGIN'));
+			`,
+			env: {
+				MU_PLUGIN: muPlugin
+			}
+		});
 		const address = result.server.address();
 		const port = typeof address === 'object' && address ? address.port : 0;
 		const url = `http://127.0.0.1:${port}/`;

@@ -120,11 +120,20 @@ async function ensureSmtpServerForSite(sitePath) {
     if (smtpServers[sitePath]?.server) return smtpServers[sitePath];
 
     const server = new SMTPServer({
-        disabledCommands: ['AUTH'],
+		secure: false,
+		hideSTARTTLS: true,
+		disabledCommands: ['AUTH', 'STARTTLS'],
         logger: false,
         onData(stream, session, callback) {
             const chunks = [];
-            stream.on('data', (d) => chunks.push(Buffer.from(d)));
+			stream.on('error', (err) => {
+				console.error('[SMTP] stream error', err && err.stack ? err.stack : String(err));
+				try { callback(err); } catch {}
+			});
+			stream.on('data', (d) => {
+				console.log(`Got a data chunk!`);
+				chunks.push(Buffer.from(d));
+			});
             stream.on('end', async () => {
                 const raw = Buffer.concat(chunks);
                 try {
@@ -148,6 +157,7 @@ async function ensureSmtpServerForSite(sitePath) {
                         })(),
                         raw: raw.toString('utf8')
                     };
+                    console.log(`[SMTP] New email for site ${sitePath}: subject="${msg.subject}" from="${msg.from}" to="${msg.to}"`);
                     await appendSiteEmail(sitePath, msg);
                     broadcastToAll('smtp:new-email', { sitePath, message: msg });
                 } catch (e) {
@@ -163,6 +173,7 @@ async function ensureSmtpServerForSite(sitePath) {
                         headers: {},
                         raw: raw.toString('utf8')
                     };
+                    console.log(`[SMTP] New email for site ${sitePath}: (unparsed) size=${raw.length} bytes`);
                     await appendSiteEmail(sitePath, msg);
                     broadcastToAll('smtp:new-email', { sitePath, message: msg });
                 }
@@ -509,8 +520,8 @@ ipcMain.handle('npm:kill', async (_event, { runId, directoryPath }) => {
 });
 
 ipcMain.handle('playground:start', async (event, sitePath) => {
-	// Ensure a per-site SMTP server is running alongside the dev server
-	ensureSmtpServerForSite(sitePath).catch(() => {});
+	// Ensure a per-site SMTP server is running alongside the dev server and get its port
+	const smtp = await ensureSmtpServerForSite(sitePath).catch(() => null);
 	const buildDir = path.join(sitePath, 'build');
 	if (playgroundServers[sitePath]?.child) {
 		return { ok: true, url: playgroundServers[sitePath].url };
@@ -518,7 +529,17 @@ ipcMain.handle('playground:start', async (event, sitePath) => {
 	const runnerPath = path.join(__dirname, 'server-runner.js');
 	const child = spawn(process.execPath, [runnerPath, buildDir], {
 		cwd: buildDir,
-		env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+		env: {
+			...process.env,
+			ELECTRON_RUN_AS_NODE: '1',
+			// Provide SMTP settings to the server runner so it can configure WP constants
+			WP_MAIL_SMTP_HOST: '127.0.0.1',
+			WP_MAIL_SMTP_PORT: String((smtp && smtp.port) ? smtp.port : 25),
+			WP_MAIL_SMTP_AUTH: 'false',
+			WP_MAIL_SMTP_SECURE: '',
+			WP_MAIL_SMTP_USER: '',
+			WP_MAIL_SMTP_PASS: ''
+		},
 		shell: false,
 		windowsHide: true
 	});
