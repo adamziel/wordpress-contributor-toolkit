@@ -371,6 +371,16 @@ function SiteRow({ sitePath, initialized, createdAt, onInitialized, onForget, on
               {starting || serverUrl ? (
                 <span style={{ marginLeft: 8 }}>{starting ? 'Starting...' : serverUrl ? (<a href={serverUrl} onClick={(e) => { e.preventDefault(); window.api.openExternal(serverUrl); }}>{serverUrl}</a>) : null}</span>
               ) : null}
+              {running && serverUrl ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    const adminer = (serverUrl || '').replace(/\/$/, '/') + 'adminer.php';
+                    window.api.openExternal(adminer);
+                  }}
+                  style={{ marginLeft: 8 }}
+                >Open Adminer</Button>
+              ) : null}
             </FlexItem>
             <FlexItem><Button variant="secondary" onClick={openPatchModal}>Create patch</Button></FlexItem>
             <FlexItem><DropdownMenu icon={chevronDown} label="Run command" text="Run command" controls={[{title:'npm run build',onClick:()=>runScript('build')},{title:'npm run build:dev',onClick:()=>runScript('build:dev')},{title:'npm run dev',onClick:()=>runScript('dev')},{title:'npm run test',onClick:()=>runScript('test')},{title:'npm run watch',onClick:()=>runScript('watch')},{title:'npm run grunt',onClick:()=>runScript('grunt')},{title:'Kill running command',onClick:killCurrent}]}/></FlexItem>

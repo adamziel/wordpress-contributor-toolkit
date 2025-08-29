@@ -1,4 +1,6 @@
 const path = require('path');
+const fs = require('fs');
+const { writeFiles: playgroundWriteFiles } = require('@php-wasm/universal');
 
 async function main() {
 	const buildDir = process.argv[2];
@@ -55,6 +57,59 @@ async function main() {
 				MU_PLUGIN: muPlugin
 			}
 		});
+
+		// Use bundled Adminer PHP from src/adminer.php
+		try {
+			await playgroundWriteFiles(result.playground, '/wordpress', {
+				'adminer.php': `<?php
+
+				if ($_SERVER['QUERY_STRING'] === '' || empty($_COOKIE['adminer_permanent'])) {
+					$_POST['auth'] = [
+						'driver'    => 'sqlite',
+						'server'    => '/wordpress/wp-content/database/.ht.sqlite',
+						'username'  => '',
+						'password'  => '',
+						'db'        => '/wordpress/wp-content/database/.ht.sqlite',
+						'permanent' => 1,
+					];
+				}
+				
+				function adminer_object() {
+					class AdminerSoftware extends Adminer\\Adminer {
+					
+						function name() {
+							return 'WordPress';
+						}
+						
+						function permanentLogin($i = false) {
+							return '';
+						}
+						
+						function credentials() {
+							return array('localhost', 'ODBC', '');
+						}
+						
+						function database() {
+							return '/wordpress/wp-content/database/.ht.sqlite';
+						}
+						
+						function login($login, $password) {
+							return true;
+						}
+					
+					}
+					return new AdminerSoftware;
+				}
+				require __DIR__ . '/adminer-core.php';
+				`,
+				'adminer-core.php': fs.readFileSync(path.join(__dirname, 'adminer.php')),//.replaceAll(`login($We,$F){if($F=="")return`, `login($We,$F){`),
+				// 'adminer-plugins': {
+				// 	'login-password-less.php': fs.readFileSync(path.join(__dirname, 'adminer-plugins', 'login-password-less.php'), 'utf8'),
+				// }
+			});
+		} catch (e) {
+			console.error('[Adminer] load failed:', e && e.stack ? e.stack : String(e));
+		}
 		const address = result.server.address();
 		const port = typeof address === 'object' && address ? address.port : 0;
 		const url = `http://127.0.0.1:${port}/`;
