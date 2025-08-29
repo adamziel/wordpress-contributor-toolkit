@@ -4,6 +4,7 @@ const os = require('os');
 const fs = require('fs');
 const fse = require('fs-extra');
 const https = require('https');
+const nodeHttp = require('http');
 const extract = require('extract-zip');
 const git = require('isomorphic-git');
 const http = require('isomorphic-git/http/node');
@@ -86,6 +87,8 @@ const playgroundServers = {};
 const wpDebugWatchers = {};
 /** @type {Record<string, { server: import('smtp-server').SMTPServer, port: number }>} */
 const smtpServers = {};
+/** @type {{ child: import('child_process').ChildProcess, url?: string } | null */
+let playgroundWebServer = null;
 
 function smtpStoreKey(sitePath) {
     return `siteMail:${sitePath}`;
@@ -630,6 +633,142 @@ ipcMain.handle('playground:stop', async (_event, sitePath) => {
 	} catch (e) {
 		return { ok: false, error: String(e) };
 	}
+});
+
+// --- Global Playground web server (serves local-playground-web) ---
+ipcMain.handle('playground-web:available', async () => {
+    const webDirCandidates = [
+        path.join(app.getAppPath(), 'local-playground-web'),
+        path.join(__dirname, '..', 'local-playground-web')
+    ];
+    for (const p of webDirCandidates) {
+        try { if (fs.existsSync(p)) return true; } catch {}
+    }
+    return false;
+});
+
+ipcMain.handle('playground-web:start', async (event) => {
+    if (playgroundWebServer?.child) {
+        return { ok: true, url: playgroundWebServer.url || 'http://127.0.0.1:39372/' };
+    }
+
+    // If something is already listening on the desired port, treat it as started
+    const expectedUrl = 'http://127.0.0.1:39372/';
+    const reachable = await new Promise((resolve) => {
+        try {
+            const req = nodeHttp.get(expectedUrl, (res) => { try { req.destroy(); } catch {}; resolve(true); });
+            req.on('error', () => { try { req.destroy(); } catch {}; resolve(false); });
+            req.setTimeout(1000, () => { try { req.destroy(); } catch {}; resolve(false); });
+        } catch { resolve(false); }
+    });
+    if (reachable) {
+        broadcastToAll('playground-web:url', { url: expectedUrl });
+        return { ok: true, url: expectedUrl };
+    }
+
+    const webDirCandidates = [
+        path.join(app.getAppPath(), 'local-playground-web'),
+        path.join(__dirname, '..', 'local-playground-web')
+    ];
+    let webDir = webDirCandidates.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
+    if (!webDir) {
+        return { ok: false, error: 'local-playground-web directory not found.' };
+    }
+
+    const runnerPath = path.join(__dirname, 'playground-web-runner.js');
+    const child = spawn(process.execPath, [runnerPath, webDir, '39372'], {
+        cwd: webDir,
+        env: {
+            ...process.env,
+            ELECTRON_RUN_AS_NODE: '1'
+        },
+        shell: false,
+        windowsHide: true
+    });
+    playgroundWebServer = { child };
+
+    let resolved = false;
+    let pendingResolve = null;
+    let timeoutId = null;
+    let probeIntervalId = null;
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (data) => {
+        const text = String(data);
+        try { broadcastToAll('playground-web:log', { type: 'stdout', data: text }); } catch {}
+        const match = text.match(/WEB_SERVER_URL:(.*)/);
+        if (match && !resolved) {
+            resolved = true;
+            playgroundWebServer.url = match[1].trim();
+            broadcastToAll('playground-web:url', { url: playgroundWebServer.url });
+            if (typeof pendingResolve === 'function') {
+                clearTimeout(timeoutId);
+                if (probeIntervalId) clearInterval(probeIntervalId);
+                pendingResolve({ ok: true, url: playgroundWebServer.url });
+                pendingResolve = null;
+            }
+        }
+    });
+    child.stderr.on('data', (data) => {
+        try { broadcastToAll('playground-web:log', { type: 'stderr', data: String(data) }); } catch {}
+    });
+    child.on('error', (err) => {
+        try { broadcastToAll('playground-web:log', { type: 'stderr', data: String(err) + '\n' }); } catch {}
+    });
+    child.on('close', (code) => {
+        const stillPending = !resolved && typeof pendingResolve === 'function';
+        playgroundWebServer = null;
+        if (stillPending) {
+            clearTimeout(timeoutId);
+            if (probeIntervalId) clearInterval(probeIntervalId);
+            try { pendingResolve({ ok: false, error: 'Server exited before becoming ready' }); } catch {}
+            pendingResolve = null;
+        }
+        broadcastToAll('playground-web:stopped', { code });
+    });
+
+    return new Promise((resolve) => {
+        pendingResolve = resolve;
+        // Fallback readiness probe if CLI output is not captured
+        const probe = () => {
+            try {
+                const req = nodeHttp.get(expectedUrl, (res) => {
+                    try { req.destroy(); } catch {}
+                    if (!resolved) {
+                        resolved = true;
+                        playgroundWebServer.url = expectedUrl;
+                        broadcastToAll('playground-web:url', { url: expectedUrl });
+                        if (typeof pendingResolve === 'function') {
+                            clearTimeout(timeoutId);
+                            if (probeIntervalId) clearInterval(probeIntervalId);
+                            pendingResolve({ ok: true, url: expectedUrl });
+                            pendingResolve = null;
+                        }
+                    }
+                });
+                req.on('error', () => { try { req.destroy(); } catch {} });
+                req.setTimeout(1500, () => { try { req.destroy(); } catch {} });
+            } catch {}
+        };
+        probeIntervalId = setInterval(probe, 600);
+        timeoutId = setTimeout(() => {
+            if (!resolved && typeof pendingResolve === 'function') {
+                pendingResolve({ ok: false, error: 'Timed out starting web server' });
+                pendingResolve = null;
+            }
+            if (probeIntervalId) clearInterval(probeIntervalId);
+        }, 20000);
+    });
+});
+
+ipcMain.handle('playground-web:stop', async () => {
+    if (!playgroundWebServer?.child) return { ok: true };
+    try {
+        playgroundWebServer.child.kill();
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, error: String(e) };
+    }
 });
 
 // --- SMTP IPC ---

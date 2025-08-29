@@ -2442,7 +2442,7 @@
           var HostPortal = 4;
           var HostComponent = 5;
           var HostText = 6;
-          var Fragment9 = 7;
+          var Fragment10 = 7;
           var Mode = 8;
           var ContextConsumer = 9;
           var ContextProvider = 10;
@@ -3599,7 +3599,7 @@
                 return "DehydratedFragment";
               case ForwardRef:
                 return getWrappedName$1(type, type.render, "ForwardRef");
-              case Fragment9:
+              case Fragment10:
                 return "Fragment";
               case HostComponent:
                 return type;
@@ -12028,7 +12028,7 @@
               }
             }
             function updateFragment2(returnFiber, current2, fragment, lanes, key) {
-              if (current2 === null || current2.tag !== Fragment9) {
+              if (current2 === null || current2.tag !== Fragment10) {
                 var created = createFiberFromFragment(fragment, returnFiber.mode, lanes, key);
                 created.return = returnFiber;
                 return created;
@@ -12431,7 +12431,7 @@
                 if (child.key === key) {
                   var elementType = element.type;
                   if (elementType === REACT_FRAGMENT_TYPE) {
-                    if (child.tag === Fragment9) {
+                    if (child.tag === Fragment10) {
                       deleteRemainingChildren(returnFiber, child.sibling);
                       var existing = useFiber(child, element.props.children);
                       existing.return = returnFiber;
@@ -17907,7 +17907,7 @@
                 var _resolvedProps2 = workInProgress2.elementType === type ? _unresolvedProps2 : resolveDefaultProps(type, _unresolvedProps2);
                 return updateForwardRef(current2, workInProgress2, type, _resolvedProps2, renderLanes2);
               }
-              case Fragment9:
+              case Fragment10:
                 return updateFragment(current2, workInProgress2, renderLanes2);
               case Mode:
                 return updateMode(current2, workInProgress2, renderLanes2);
@@ -18179,7 +18179,7 @@
               case SimpleMemoComponent:
               case FunctionComponent:
               case ForwardRef:
-              case Fragment9:
+              case Fragment10:
               case Mode:
               case Profiler:
               case ContextConsumer:
@@ -22440,7 +22440,7 @@
             return fiber;
           }
           function createFiberFromFragment(elements2, mode, lanes, key) {
-            var fiber = createFiber(Fragment9, elements2, key, mode);
+            var fiber = createFiber(Fragment10, elements2, key, mode);
             fiber.lanes = lanes;
             return fiber;
           }
@@ -24811,7 +24811,7 @@
           var ContextProvider = REACT_PROVIDER_TYPE;
           var Element2 = REACT_ELEMENT_TYPE;
           var ForwardRef = REACT_FORWARD_REF_TYPE;
-          var Fragment9 = REACT_FRAGMENT_TYPE;
+          var Fragment10 = REACT_FRAGMENT_TYPE;
           var Lazy = REACT_LAZY_TYPE;
           var Memo = REACT_MEMO_TYPE;
           var Portal3 = REACT_PORTAL_TYPE;
@@ -24870,7 +24870,7 @@
           exports.ContextProvider = ContextProvider;
           exports.Element = Element2;
           exports.ForwardRef = ForwardRef;
-          exports.Fragment = Fragment9;
+          exports.Fragment = Fragment10;
           exports.Lazy = Lazy;
           exports.Memo = Memo;
           exports.Portal = Portal3;
@@ -47064,6 +47064,23 @@ If there's a particular need for this, please submit a feature request at https:
     (0, import_react68.useEffect)(() => {
       if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight;
     }, [terminalMsgs]);
+    const [webStarting, setWebStarting] = (0, import_react68.useState)(false);
+    const [webUrl, setWebUrl] = (0, import_react68.useState)("");
+    const [webLogs, setWebLogs] = (0, import_react68.useState)("");
+    const [webError, setWebError] = (0, import_react68.useState)("");
+    const webLogRef = (0, import_react68.useRef)(null);
+    (0, import_react68.useEffect)(() => {
+      if (webLogRef.current) webLogRef.current.scrollTop = webLogRef.current.scrollHeight;
+    }, [webLogs]);
+    const [webAvailable, setWebAvailable] = (0, import_react68.useState)(false);
+    (0, import_react68.useEffect)(() => {
+      (async () => {
+        try {
+          setWebAvailable(Boolean(await window.api.playgroundWebAvailable()));
+        } catch {
+        }
+      })();
+    }, []);
     (0, import_react68.useEffect)(() => {
       const unsubProg = window.api.subscribeSetupProgress((p) => {
         if (p && p.message) setTerminalMsgs((v) => v + p.message + "\n");
@@ -47097,6 +47114,46 @@ If there's a particular need for this, please submit a feature request at https:
         alert(String(e));
       }
     }, [refresh]);
+    const togglePlaygroundWeb = (0, import_react68.useCallback)(async () => {
+      if (!webUrl) {
+        setWebStarting(true);
+        setWebError("");
+        setWebLogs("");
+        try {
+          const res = await window.api.startPlaygroundWeb(
+            ({ data }) => setWebLogs((v) => v + String(data)),
+            (url) => {
+              const u = (url || "http://127.0.0.1:39372/").replace(/\/$/, "/");
+              setWebUrl(u);
+              setWebStarting(false);
+            },
+            (payload) => {
+              setWebUrl("");
+              if (payload && typeof payload.code === "number" && payload.code !== 0) setWebError(`Server exited with code ${payload.code}`);
+            }
+          );
+          if (res && res.ok && res.url) {
+            const u = String(res.url).replace(/\/$/, "/");
+            setWebUrl(u);
+            setWebStarting(false);
+          } else if (!res || !res.ok) {
+            setWebStarting(false);
+            if (res && res.error) {
+              setWebError(String(res.error));
+            }
+          }
+        } catch (e) {
+          setWebStarting(false);
+          setWebError(String(e));
+        }
+      } else {
+        try {
+          await window.api.stopPlaygroundWeb();
+        } catch {
+        }
+        setWebUrl("");
+      }
+    }, [webUrl]);
     const onInitialized = (0, import_react68.useCallback)((sitePath) => {
       setSiteMeta((m) => ({ ...m || {}, [sitePath]: { ...m?.[sitePath] || {}, initialized: true } }));
     }, [setSiteMeta]);
@@ -47111,8 +47168,36 @@ If there's a particular need for this, please submit a feature request at https:
     return /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { style: { margin: 16, fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" }, children: [
       /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(component_default3, { align: "center", justify: "space-between", style: { marginBottom: 12 }, children: [
         /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("h2", { style: { margin: 0 }, children: "WordPress Core Sites" }),
-        sites.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { icon: plus_default, variant: "primary", onClick: chooseAndSetup, children: "Create WordPress Core site" }) : null
+        /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+          sites.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(button_default, { icon: plus_default, variant: "primary", onClick: chooseAndSetup, children: "Create WordPress Core site" }) : null,
+          webAvailable ? /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(import_jsx_runtime54.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(
+              button_default,
+              {
+                isBusy: webStarting,
+                variant: webUrl ? "secondary" : "primary",
+                onClick: togglePlaygroundWeb,
+                children: webUrl ? "Stop Playground web server" : "Start Playground web server"
+              }
+            ),
+            webStarting || webUrl ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("span", { style: { marginLeft: 4, fontSize: 12 }, children: webStarting ? "Starting\u2026" : /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("a", { href: webUrl || "http://127.0.0.1:39372/", onClick: (e) => {
+              e.preventDefault();
+              window.api.openExternal(webUrl || "http://127.0.0.1:39372/");
+            }, children: webUrl || "http://127.0.0.1:39372/" }) }) : null
+          ] }) : null
+        ] })
       ] }),
+      webStarting || webUrl || webError || webLogs ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default7, { style: { marginBottom: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(component_default9, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between" }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { fontWeight: 600 }, children: "Playground web server" }),
+          /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { fontSize: 12, color: "#666" }, children: webStarting ? "Starting\u2026" : webUrl ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("a", { href: webUrl, onClick: (e) => {
+            e.preventDefault();
+            window.api.openExternal(webUrl);
+          }, children: webUrl }) : "Stopped" })
+        ] }),
+        webError ? /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { marginTop: 6, color: "#C00", fontSize: 12 }, children: webError }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { ref: webLogRef, style: { marginTop: 8, whiteSpace: "pre-wrap", background: "#111", color: "#eee", padding: 8, borderRadius: 6, height: 140, overflow: "auto" }, children: webLogs })
+      ] }) }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)("div", { id: "sites", children: [
         pendingSite && /* @__PURE__ */ (0, import_jsx_runtime54.jsx)(component_default7, { style: { marginBottom: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime54.jsxs)(component_default9, { children: [
           /* @__PURE__ */ (0, import_jsx_runtime54.jsx)("div", { style: { fontWeight: 600 }, children: "Setting up new site\u2026" }),

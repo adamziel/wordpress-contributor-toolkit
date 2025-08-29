@@ -104,6 +104,29 @@ contextBridge.exposeInMainWorld('api', {
 		return await ipcRenderer.invoke('playground:stop', sitePath);
 	}
 ,
+	// Global Playground web server controls
+	playgroundWebAvailable: async () => {
+		return await ipcRenderer.invoke('playground-web:available');
+	}
+,
+	startPlaygroundWeb: async (onLog, onUrl, onStopped) => {
+		const logHandler = (_e, payload) => { onLog && onLog(payload); };
+		const urlHandler = (_e, payload) => { onUrl && onUrl(payload.url); };
+		const stoppedHandler = (_e, payload) => {
+			ipcRenderer.removeListener('playground-web:log', logHandler);
+			ipcRenderer.removeListener('playground-web:url', urlHandler);
+			ipcRenderer.removeListener('playground-web:stopped', stoppedHandler);
+			onStopped && onStopped(payload);
+		};
+		ipcRenderer.on('playground-web:log', logHandler);
+		ipcRenderer.on('playground-web:url', urlHandler);
+		ipcRenderer.on('playground-web:stopped', stoppedHandler);
+		return await ipcRenderer.invoke('playground-web:start');
+	},
+	stopPlaygroundWeb: async () => {
+		return await ipcRenderer.invoke('playground-web:stop');
+	}
+,
 	getSiteStatus: async (sitePath) => {
 		return await ipcRenderer.invoke('site:status', sitePath);
 	}

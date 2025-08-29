@@ -32,6 +32,14 @@ function App() {
   const [terminalMsgs, setTerminalMsgs] = useState('');
   const termRef = useRef(null);
   useEffect(() => { if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight; }, [terminalMsgs]);
+  const [webStarting, setWebStarting] = useState(false);
+  const [webUrl, setWebUrl] = useState('');
+  const [webLogs, setWebLogs] = useState('');
+  const [webError, setWebError] = useState('');
+  const webLogRef = useRef(null);
+  useEffect(() => { if (webLogRef.current) webLogRef.current.scrollTop = webLogRef.current.scrollHeight; }, [webLogs]);
+  const [webAvailable, setWebAvailable] = useState(false);
+  useEffect(() => { (async () => { try { setWebAvailable(Boolean(await window.api.playgroundWebAvailable())); } catch {} })(); }, []);
 
   useEffect(() => {
     const unsubProg = window.api.subscribeSetupProgress((p) => {
@@ -61,6 +69,35 @@ function App() {
     }
   }, [refresh]);
 
+  const togglePlaygroundWeb = useCallback(async () => {
+    if (!webUrl) {
+      setWebStarting(true);
+      setWebError('');
+      setWebLogs('');
+      try {
+        const res = await window.api.startPlaygroundWeb(
+          ({ data }) => setWebLogs((v) => v + String(data)),
+          (url) => { const u = (url || 'http://127.0.0.1:39372/').replace(/\/$/,'/'); setWebUrl(u); setWebStarting(false); },
+          (payload) => { setWebUrl(''); if (payload && typeof payload.code === 'number' && payload.code !== 0) setWebError(`Server exited with code ${payload.code}`); }
+        );
+        if (res && res.ok && res.url) {
+          const u = String(res.url).replace(/\/$/,'/');
+          setWebUrl(u);
+          setWebStarting(false);
+        } else if (!res || !res.ok) {
+          setWebStarting(false);
+          if (res && res.error) { setWebError(String(res.error)); }
+        }
+      } catch (e) {
+        setWebStarting(false);
+        setWebError(String(e));
+      }
+    } else {
+      try { await window.api.stopPlaygroundWeb(); } catch {}
+      setWebUrl('');
+    }
+  }, [webUrl]);
+
   const onInitialized = useCallback((sitePath) => {
     setSiteMeta((m) => ({ ...(m || {}), [sitePath]: { ...(m?.[sitePath] || {}), initialized: true } }));
   }, [setSiteMeta]);
@@ -79,10 +116,44 @@ function App() {
     <div style={{ margin: 16, fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif' }}>
       <Flex align="center" justify="space-between" style={{ marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>WordPress Core Sites</h2>
-        {sites.length > 0 ? (
-          <Button icon={plus} variant="primary" onClick={chooseAndSetup}>Create WordPress Core site</Button>
-        ) : null}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {sites.length > 0 ? (
+            <Button icon={plus} variant="primary" onClick={chooseAndSetup}>Create WordPress Core site</Button>
+          ) : null}
+          {webAvailable ? (<>
+            <Button
+              isBusy={webStarting}
+              variant={webUrl ? 'secondary' : 'primary'}
+              onClick={togglePlaygroundWeb}
+            >{webUrl ? 'Stop Playground web server' : 'Start Playground web server'}</Button>
+            {webStarting || webUrl ? (
+            <span style={{ marginLeft: 4, fontSize: 12 }}>
+              {webStarting ? 'Starting…' : (
+                <a href={webUrl || 'http://127.0.0.1:39372/'} onClick={(e) => { e.preventDefault(); window.api.openExternal(webUrl || 'http://127.0.0.1:39372/'); }}>{webUrl || 'http://127.0.0.1:39372/'}</a>
+              )}
+            </span>
+            ) : null}
+          </>) : null}
+        </div>
       </Flex>
+
+      {/* Playground web server status + logs */}
+      {(webStarting || webUrl || webError || webLogs) ? (
+        <Card style={{ marginBottom: 12 }}>
+          <CardBody>
+            <div style={{ display:'flex', alignItems:'center', gap:8, justifyContent:'space-between' }}>
+              <div style={{ fontWeight: 600 }}>Playground web server</div>
+              <div style={{ fontSize:12, color:'#666' }}>
+                {webStarting ? 'Starting…' : (webUrl ? (
+                  <a href={webUrl} onClick={(e)=>{ e.preventDefault(); window.api.openExternal(webUrl); }}>{webUrl}</a>
+                ) : 'Stopped')}
+              </div>
+            </div>
+            {webError ? (<div style={{ marginTop:6, color:'#C00', fontSize:12 }}>{webError}</div>) : null}
+            <div ref={webLogRef} style={{ marginTop:8, whiteSpace:'pre-wrap', background:'#111', color:'#eee', padding:8, borderRadius:6, height:140, overflow:'auto' }}>{webLogs}</div>
+          </CardBody>
+        </Card>
+      ) : null}
 
       <div id="sites">
         {pendingSite && (
